@@ -1,3 +1,7 @@
+import StringIO
+import sys
+
+
 # Test states
 RUNNING = 'RUNNING'    # test running
 FAILED = 'FAILED'      # test failed
@@ -102,6 +106,12 @@ class DTestBase(object):
         # Compare test objects
         return self.test is not other.test
 
+    def __repr__(self):
+        # Generate a representation of the test
+        return ('<%s.%s object at %#x wrapping %r>' %
+                (self.__class__.__module__, self.__class__.__name__,
+                 id(self), self.test))
+
     def add_dep(self, dep):
         # First, we need to find the requisite DTest (fixtures can be
         # passed in as DTestFixture instances to override)
@@ -109,6 +119,14 @@ class DTestBase(object):
 
         # Now simply add it to the list of dependencies
         self._deps.add(dt)
+
+    def _set_pre(self, pre):
+        # Save the pre-test fixture
+        self._pre = pre
+
+    def _set_post(self, post):
+        # Save the post-test fixture
+        self._post = post
 
 
 class DTest(DTestBase):
@@ -128,26 +146,97 @@ class DTestResult(object):
         self._result = None
         self._nextctx = None
         self._ctx = None
-        self._msgs = []
+        self._msgs = {}
+        self._out = None
+        self._orig_out = None
+        self._err = None
+        self._orig_err = None
 
     def __enter__(self):
         # Set up the context
         self._ctx = self._nextctx
 
+        # Save the current stdout and stderr
+        self._orig_out = sys.stdout
+        self._orig_err = sys.stderr
+
+        # Set up string buffers for output and error
+        self._out = StringIO.StringIO()
+        self._err = StringIO.StringIO()
+
+        # And set them up
+        sys.stdout = self._out
+        sys.stderr = self._err
+
     def __exit__(self, exc_type, exc_value, tb):
+        # Restore standard output and error
+        sys.stdout = self._orig_out
+        sys.stderr = self._orig_err
+        self._orig_out = None
+        self._orig_err = None
+
+        # Get the output information and clean up
+        outdata = self._out.getvalue()
+        self._out.close()
+        self._out = None
+
+        # Get the error information and clean up
+        errdata = self._err.getvalue()
+        self._err.close()
+        self._err = None
+
         # If this was the test, determine a result
         if self._ctx == TEST:
             self._result = exc_type is None
 
-        # Now, if there was an exception, generate a message
-        if exc_type is not None:
-            # XXX generate message
-            pass
+        # Generate a message, if necessary
+        if outdata or errdata or exc_type or exc_value or tb:
+            self._msgs[self._ctx] = DTestMessage(self._ctx,
+                                                 outdata, errdata,
+                                                 exc_type, exc_value, tb)
+
+        # Clean up the context
+        self._ctx = None
+        self._nextctx = None
+
+        # We handled the exception
+        return True
 
     def __nonzero__(self):
+        # The boolean value is True for pass, False for fail or not
+        # run
         return self._result is True
+
+    def __len__(self):
+        # Return the number of messages
+        return len(self._msgs)
+
+    def __getitem__(self, key):
+        # Return the message for the desired key
+        return self._msgs[key]
+
+    def __contains__(self, key):
+        # Does the key exist in the list of messages?
+        return key in self._msgs
+
+    def __repr__(self):
+        # Generate a representation of the result
+        return ('<%s.%s object at %#x result %r with messages %r>' %
+                (self.__class__.__module__, self.__class__.__name__,
+                 id(self), self._result, self._msgs.keys()))
 
     def accumulate(self, nextctx):
         # Save the next context
         self._nextctx = nextctx
         return self
+
+
+class DTestMessage(object):
+    def __init__(self, ctx, out, err, exc_type, exc_value, tb):
+        # Save all the message information
+        self.ctx = ctx
+        self.out = out
+        self.err = err
+        self.exc_type = exc_type
+        self.exc_value = exc_value
+        self.exc_tb = tb
