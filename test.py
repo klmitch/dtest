@@ -76,7 +76,8 @@ class DTestBase(object):
         with self._result.accumulate(result.TEST):
             self._test(*args, **kwargs)
 
-        # Invoke any clean-up that's necessary
+        # Invoke any clean-up that's necessary (regardless of
+        # exceptions)
         if self._post is not None:
             with self._result.accumulate(result.POST):
                 self._post()
@@ -107,6 +108,24 @@ class DTestBase(object):
                 (self.__class__.__module__, self.__class__.__name__,
                  id(self), self.test))
 
+    @property
+    def result(self):
+        # We want the result to be read-only, but to be accessed like
+        # an attribute
+        return self._result
+
+    @property
+    def state(self):
+        # We want the state to be read-only, but to be accessed like
+        # an attribute
+        return self._state
+
+    @property
+    def test(self):
+        # We want the test to be read-only, but to be accessed like an
+        # attribute
+        return self._test
+
     def setUp(self, pre):
         # Save the pre-test fixture
         self._pre = pre
@@ -114,12 +133,6 @@ class DTestBase(object):
     def tearDown(self, post):
         # Save the post-test fixture
         self._post = post
-
-    @property
-    def result(self):
-        # We want the result to be read-only, but to be accessed like
-        # an attribute
-        return self._result
 
     def add_dep(self, dep):
         # First, we need to find the requisite DTest (fixtures can be
