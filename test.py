@@ -1,5 +1,4 @@
-import StringIO
-import sys
+from dtest import stream
 
 
 # Test states
@@ -153,43 +152,17 @@ class DTestResult(object):
         self._nextctx = None
         self._ctx = None
         self._msgs = {}
-        self._out = None
-        self._orig_out = None
-        self._err = None
-        self._orig_err = None
 
     def __enter__(self):
         # Set up the context
         self._ctx = self._nextctx
 
-        # Save the current stdout and stderr
-        self._orig_out = sys.stdout
-        self._orig_err = sys.stderr
-
-        # Set up string buffers for output and error
-        self._out = StringIO.StringIO()
-        self._err = StringIO.StringIO()
-
-        # And set them up
-        sys.stdout = self._out
-        sys.stderr = self._err
+        # Clear the streams for this thread
+        stream.pop()
 
     def __exit__(self, exc_type, exc_value, tb):
-        # Restore standard output and error
-        sys.stdout = self._orig_out
-        sys.stderr = self._orig_err
-        self._orig_out = None
-        self._orig_err = None
-
-        # Get the output information and clean up
-        outdata = self._out.getvalue()
-        self._out.close()
-        self._out = None
-
-        # Get the error information and clean up
-        errdata = self._err.getvalue()
-        self._err.close()
-        self._err = None
+        # Get the output and clean up
+        outdata, errdata = stream.pop()
 
         # If this was the test, determine a result
         if self._ctx == TEST:
