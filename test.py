@@ -112,14 +112,6 @@ class DTestBase(object):
                 (self.__class__.__module__, self.__class__.__name__,
                  id(self), self.test))
 
-    def add_dep(self, dep):
-        # First, we need to find the requisite DTest (fixtures can be
-        # passed in as DTestFixture instances to override)
-        dt = DTest(dep)
-
-        # Now simply add it to the list of dependencies
-        self._deps.add(dt)
-
     def _set_pre(self, pre):
         # Save the pre-test fixture
         self._pre = pre
@@ -127,6 +119,20 @@ class DTestBase(object):
     def _set_post(self, post):
         # Save the post-test fixture
         self._post = post
+
+    @property
+    def result(self):
+        # We want the result to be read-only, but to be accessed like
+        # an attribute
+        return self._result
+
+    def add_dep(self, dep):
+        # First, we need to find the requisite DTest (fixtures can be
+        # passed in as DTestFixture instances to override)
+        dt = DTest(dep)
+
+        # Now simply add it to the list of dependencies
+        self._deps.add(dt)
 
 
 class DTest(DTestBase):
