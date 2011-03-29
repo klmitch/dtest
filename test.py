@@ -107,11 +107,11 @@ class DTestBase(object):
                 (self.__class__.__module__, self.__class__.__name__,
                  id(self), self.test))
 
-    def _set_pre(self, pre):
+    def setUp(self, pre):
         # Save the pre-test fixture
         self._pre = pre
 
-    def _set_post(self, post):
+    def tearDown(self, post):
         # Save the post-test fixture
         self._post = post
 
@@ -139,3 +139,62 @@ class DTest(DTestBase):
 
 class DTestFixture(DTestBase):
     pass
+
+
+def test(func):
+    # Wrap func in a test
+    return DTest(func)
+
+
+def skip(func):
+    # Get the DTest object for the test
+    dt = DTest(func)
+
+    # Set up to skip it
+    dt._skip = True
+
+    # Return the test
+    return dt
+
+
+def failing(func):
+    # Get the DTest object for the test
+    dt = DTest(func)
+
+    # Set up to expect it to fail
+    dt._exp_pass = False
+
+    # Return the test
+    return dt
+
+
+def attr(**kwargs):
+    # Need a wrapper to perform the actual decoration
+    def wrapper(func):
+        # Get the DTest object for the test
+        dt = DTest(func)
+
+        # Update the attributes
+        dt._attrs.update(kwargs)
+
+        # Return the test
+        return dt
+
+    # Return the actual decorator
+    return wrapper
+
+
+def depends(*deps):
+    # Need a wrapper to perform the actual decoration
+    def wrapper(func):
+        # Get the DTest object for the test
+        dt = DTest(func)
+
+        # Add the dependencies
+        dt._deps |= set(deps)
+
+        # Return the test
+        return dt
+
+    # Return the actual decorator
+    return wrapper
