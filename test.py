@@ -1,3 +1,5 @@
+import re
+
 from dtest import result
 from dtest import stream
 
@@ -13,7 +15,11 @@ class DTestBase(object):
     _tests = {}
 
     def __new__(cls, test):
-        # If func is a DTestBase subclass, then return it directly
+        # If test is None, return None
+        if test is None:
+            return None
+
+        # If test is a DTestBase subclass, then return it directly
         if isinstance(test, DTestBase):
             return test
 
@@ -217,3 +223,63 @@ def depends(*deps):
 
     # Return the actual decorator
     return wrapper
+
+
+class DTestCaseMeta(type):
+    _testRE = re.compile(r'(?:^|[\b_\.-])[Tt]est')
+
+    def __new__(mcs, name, bases, dict_):
+        # Look up any test fixtures
+        setUp = dict_.get('setUp', None)
+        tearDown = dict_.get('tearDown', None)
+        setUpClass = DTestFixture(dict_.get('setUpClass', None))
+        tearDownClass = DTestFixture(dict_.get('tearDownClass', None))
+
+        # Pre-transform the test fixtures
+        updates = {}
+        if setUpClass is not None:
+            updates['setUpClass'] = setUpClass
+        if tearDownClass is not None:
+            updates['tearDownClass'] = tearDownClass
+
+        # Now, we want to walk through dict_ and replace values that
+        # match the test RE with instances of DTest
+        for k, v in dict_:
+            # If it has the _dt_nottest attribute set to True, skip it
+            if hasattr(v, '_dt_nottest') and v._dt_nottest:
+                continue
+
+            # If it's one of the test fixtures, skip it
+            if (k == 'setUp' or k == 'tearDown' or
+                k == 'setUpClass' or k == 'tearDownClass'):
+                continue
+
+            # Does it match the test RE?
+            if not isinstance(v, DTestBase) and not mcs._testRE.match(k):
+                continue
+
+            # Is it already a test?
+            if not isinstance(v, DTestBase):
+                # Convert it
+                v = DTest(v)
+
+                # Store an update for it
+                updates[k] = v
+
+            # Attach fixtures as appropriate...
+            if v._pre is None and setUp is not None:
+                v.setUp(setUp)
+            if v._post is None and tearDown is not None:
+                v.tearDown(tearDown)
+
+            # Do class-level fixtures as well
+            if setUpClass is not None:
+                depends(setUpClass)(v)
+            if tearDownClass is not None:
+                depends(v)(tearDownClass)
+
+        # Update the dict_
+        dict_.update(updates)
+
+        # Now that we've done the set-up, create the class
+        return super(DTestCaseMeta, mcs).__new__(mcs, name, bases, dict_)
