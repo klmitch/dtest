@@ -159,6 +159,12 @@ def test(func):
     return DTest(func)
 
 
+def notTest(func):
+    # Mark that a function should not be considered a test
+    func._dt_nottest = True
+    return func
+
+
 def skip(func):
     # Get the DTest object for the test
     dt = DTest(func)
