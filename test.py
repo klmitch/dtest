@@ -98,21 +98,21 @@ class DTestBase(object):
 
     def __hash__(self):
         # Return the hash of the backing test
-        return hash(self.test)
+        return hash(self._test)
 
     def __eq__(self, other):
         # Compare test objects
-        return self.test is other.test
+        return self._test is other._test
 
     def __ne__(self, other):
         # Compare test objects
-        return self.test is not other.test
+        return self._test is not other._test
 
     def __repr__(self):
         # Generate a representation of the test
         return ('<%s.%s object at %#x wrapping %r>' %
                 (self.__class__.__module__, self.__class__.__name__,
-                 id(self), self.test))
+                 id(self), self._test))
 
     @property
     def result(self):
