@@ -94,7 +94,7 @@ class DTestBase(object):
         # Transition to the appropriate ending state
         self._state = COMPLETE if self._result else FAILED
 
-        # Return the state
+        # Return the result
         return self._result
 
     def __int__(self):
