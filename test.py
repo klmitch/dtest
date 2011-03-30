@@ -6,10 +6,11 @@ from dtest import stream
 
 
 # Test states
-RUNNING = 'RUNNING'    # test running
-FAILED = 'FAILED'      # test failed
-DEPFAIL = 'DEPFAIL'    # dependency failed
-COMPLETE = 'COMPLETE'  # test completed
+RUNNING = 'RUNNING'      # test running
+FAILED = 'FAILED'        # test failed
+DEPFAILED = 'DEPFAILED'  # dependency failed
+COMPLETE = 'COMPLETE'    # test completed
+SKIPPED = 'SKIPPED'      # test was skipped
 
 
 class DTestBase(object):
@@ -187,6 +188,12 @@ class DTestBase(object):
         # Return a graph
         return ('strict digraph "testdeps" {\n\t' +
                 '\n\t'.join(nodes) + '\n\n\t' + '\n\t'.join(edges) + '\n}')
+
+    def _skipped(self):
+        # Mark that this test has been skipped by transitioning the
+        # state
+        if state is None:
+            state = SKIPPED
 
 
 class DTest(DTestBase):
