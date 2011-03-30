@@ -227,6 +227,10 @@ class DTest(DTestBase):
                 # Set our own state to DEPFAILED
                 self._state = DEPFAILED
                 return False
+            elif dep._state == SKIPPED:
+                # Set our own state to SKIPPED
+                self._state = SKIPPED
+                return False
             elif dep._state != COMPLETED:
                 # Dependencies haven't finished up, yet
                 return False
