@@ -1,6 +1,7 @@
 import re
 import sys
 
+from dtest import exceptions
 from dtest import result
 from dtest import stream
 
@@ -27,7 +28,7 @@ class DTestBase(object):
 
         # Require it to be a callable...
         if not callable(test):
-            raise TestException("%r must be a callable" % test)
+            raise exceptions.TestException("%r must be a callable" % test)
 
         # Make sure we haven't already created one
         if test in DTestBase._tests:
@@ -73,6 +74,8 @@ class DTestBase(object):
         del self._attrs[key]
 
     def __call__(self, *args, **kwargs):
+        print "I should not be getting called (1)!"
+        return
         # Transition to the running state
         self._state = RUNNING
 
@@ -164,29 +167,32 @@ class DTestBase(object):
         # fully-qualified name
         def mkname(dt):
             if dt._class is not None:
-                return '.'.join(dt._test.__module__, dt._class,
-                                dt._test.__name__)
+                return '.'.join([dt._test.__module__, dt._class.__name__,
+                                 dt._test.__name__])
             else:
-                return '.'.join(dt._test.__module__,
-                                dt._test.__name__)
+                return '.'.join([dt._test.__module__,
+                                 dt._test.__name__])
 
         # Now, create the graph
         nodes = []
         edges = []
-        for dt in cls._tests:
+        for dt in DTestBase._tests.values():
             nname = mkname(dt)
 
             # Make the node
             if isinstance(dt, DTestFixture):
-                nodes.append('"%s" [label="%r",color="red"];' %
-                             (nname, dt._test))
+                nodes.append('"%(name)s" [label="%(name)s\\n%(func)r",'
+                             'color="red"];' %
+                             dict(name=nname, func=dt._test))
             else:
-                nodes.append('"%s" [label="%r"];' % (nname, dt._test))
+                nodes.append('"%(name)s" [label="%(name)s\\n%(func)r"];' %
+                             dict(name=nname, func=dt._test))
 
             # Make all the edges
             for dep in dt._deps:
                 dname = mkname(dep)
-                if isinstance(dep, DTestFixture):
+                if (isinstance(dt, DTestFixture) or
+                    isinstance(dep, DTestFixture)):
                     edges.append('"%s" -> "%s" [color="red",style="dashed"];' %
                                  (nname, dname))
                 else:
@@ -241,12 +247,12 @@ class DTestFixture(DTestBase):
         return True
 
 
-def test(func):
+def istest(func):
     # Wrap func in a test
     return DTest(func)
 
 
-def notTest(func):
+def nottest(func):
     # Mark that a function should not be considered a test
     func._dt_nottest = True
     return func
@@ -306,41 +312,97 @@ def depends(*deps):
     return wrapper
 
 
+def _mod_fixtures(modname):
+    # Split up the module name
+    mods = modname.split('.')
+
+    # Now, walk up the tree
+    setUps = []
+    tearDowns = []
+    for i in range(len(mods)):
+        module = sys.modules['.'.join(mods[:i + 1])]
+
+        # Make sure the module's been visited...
+        _visit_mod(module)
+
+        # Does the module have the fixture?
+        if hasattr(module, 'setUp'):
+            module.setUp = DTestFixture(module.setUp)
+            setUps.append(module.setUp)
+        if hasattr(module, 'tearDown'):
+            module.tearDown = DTestFixture(module.tearDown)
+            tearDowns.append(module.tearDown)
+
+    # Next, set up dependencies; each setUp() is dependent on all the
+    # ones before it...
+    for i in range(1, len(setUps)):
+        depends(*setUps[:i])(setUps[i])
+
+    # While each tearDown() is dependent on all the ones after it...
+    for i in range(len(tearDowns) - 1):
+        depends(*tearDowns[i + 1:])(tearDowns[i])
+
+    # Return the setUps and tearDowns
+    return (setUps, tearDowns)
+
+
+_testRE = re.compile(r'(?:^|[\b_\.-])[Tt]est')
+
+
+def _visit_mod(mod):
+    # Have we visited the module before?
+    if hasattr(mod, '_dt_visited') and mod._dt_visited:
+        return
+
+    # Mark that we're visiting the module
+    mod._dt_visited = True
+
+    # Check for package- and module-level fixtures
+    setUps, tearDowns = _mod_fixtures(mod.__name__)
+
+    # Search the module for tests
+    updates = {}
+    for k in dir(mod):
+        # Skip internal functions
+        if k[0] == '_':
+            continue
+
+        v = getattr(mod, k)
+
+        # If it has the _dt_nottest attribute set to True, skip it
+        if hasattr(v, '_dt_nottest') and v._dt_nottest:
+            continue
+
+        # If it's one of the test fixtures, skip it
+        if k in ('setUp', 'tearDown'):
+            continue
+
+        # Does it match the test RE?
+        if not isinstance(v, DTestBase) and not _testRE.match(k):
+            continue
+
+        # Is it already a test?
+        if not isinstance(v, DTestBase):
+            # Convert it
+            v = DTest(v)
+
+            # Store an update for it
+            updates[k] = v
+
+        # Attach fixtures as appropriate...
+        depends(*setUps)(v)
+        for td in tearDowns:
+            depends(v)(td)
+
+    # Update the module
+    for k, v in updates.items():
+        setattr(mod, k, v)
+
+
 class DTestCaseMeta(type):
-    _testRE = re.compile(r'(?:^|[\b_\.-])[Tt]est')
-
-    @staticmethod
-    def _mod_fixtures(modname):
-        # Split up the module name
-        mods = modname.split('.')
-
-        # Now, walk up the tree
-        setUps = []
-        tearDowns = []
-        for i in range(len(mods)):
-            module = sys.modules['.'.join(mods[:i + 1])]
-
-            # Does the module have the fixture?
-            if hasattr(module, 'setUp'):
-                module.setUp = DTestFixture(module.setUp)
-                setUps.append(module.setUp)
-            if hasattr(module, 'tearDown'):
-                module.tearDown = DTestFixture(module.tearDown)
-                tearDowns.append(module.tearDown)
-
-        # Next, set up dependencies; each setUp() is dependent on all the
-        # ones before it...
-        for i in range(1, len(setUps)):
-            depends(setUps[:i])(setUps[i])
-
-        # While each tearDown() is dependent on all the ones after it...
-        for i in range(len(tearDowns) - 1):
-            depends(tearDowns[i + 1:])(tearDowns[i])
-
-        # Return the setUps and tearDowns
-        return (setUps, tearDowns)
-
     def __new__(mcs, name, bases, dict_):
+        print "DTestCaseMeta.__new__(%r, %r, %r, %r)" % (mcs, name, bases, dict_)
+
         # Look up any test fixtures for the individual tests...
         setUp = dict_.get('setUp', None)
         tearDown = dict_.get('tearDown', None)
@@ -348,30 +410,44 @@ class DTestCaseMeta(type):
         # Check for package- and module-level fixtures
         setUps, tearDowns = _mod_fixtures(dict_['__module__'])
 
-        # And check for class-level fixtures
-        setUpClass = DTestFixture(dict_.get('setUpClass', None))
-        if setUpClass is not None:
-            depends(setUps)(setUpClass)
+        # Updates to the dict_ to apply later
+        updates = {}
+
+        # Check for class-level set up
+        if 'setUpClass' in dict_:
+            tmp = dict_['setUpClass']
+            if isinstance(tmp, classmethod) or isinstance(tmp, staticmethod):
+                setUpClass = DTestFixture(tmp.__func__)
+                updates['setUpClass'] = tmp.__class__(setUpClass)
+            else:
+                setUpClass = DTestFixture(tmp)
+                updates['setUpClass'] = setUpClass
+
+            # Set up dependencies
+            depends(*setUps)(setUpClass)
             setUps.append(setUpClass)
-        tearDownClass = DTestFixture(dict_.get('tearDownClass', None))
-        if tearDownClass is not None:
+
+        # Check for class-level tear down
+        if 'tearDownClass' in dict_:
+            tmp = dict_['tearDownClass']
+            if isinstance(tmp, classmethod) or isinstance(tmp, staticmethod):
+                tearDownClass = DTestFixture(tmp.__func__)
+                updates['tearDownClass'] = tmp.__class__(tearDownClass)
+            else:
+                tearDownClass = DTestFixture(tmp)
+                updates['tearDownClass'] = tearDownClass
+
+            # Set up dependencies
             for td in tearDowns:
                 depends(tearDownClass)(td)
             tearDowns.append(tearDownClass)
 
-        # Pre-transform the test fixtures
-        updates = {}
-        if setUpClass is not None:
-            updates['setUpClass'] = setUpClass
-        if tearDownClass is not None:
-            updates['tearDownClass'] = tearDownClass
-
         # Now, we want to walk through dict_ and replace values that
         # match the test RE with instances of DTest
         tests = []
-        for k, v in dict_:
+        for k, v in dict_.items():
             # If it has the _dt_nottest attribute set to True, skip it
-            if v[0] == '_' or hasattr(v, '_dt_nottest') and v._dt_nottest:
+            if k[0] == '_' or (hasattr(v, '_dt_nottest') and v._dt_nottest):
                 continue
 
             # If it's one of the test fixtures, skip it
@@ -379,7 +455,7 @@ class DTestCaseMeta(type):
                 continue
 
             # Does it match the test RE?
-            if not isinstance(v, DTestBase) and not mcs._testRE.match(k):
+            if not isinstance(v, DTestBase) and not _testRE.match(k):
                 continue
 
             # Is it already a test?
@@ -400,7 +476,7 @@ class DTestCaseMeta(type):
                 v.tearDown(tearDown)
 
             # Do package-, module-, and class-level fixtures as well
-            depends(setUps)(v)
+            depends(*setUps)(v)
             for td in tearDowns:
                 depends(v)(td)
 
@@ -413,6 +489,9 @@ class DTestCaseMeta(type):
         # Attach cls to all the tests
         for t in tests:
             t._class = cls
+
+        # Return the constructed class
+        return cls
 
 
 class DTestCase(object):
