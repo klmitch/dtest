@@ -150,6 +150,44 @@ class DTestBase(object):
         # Now simply add it to the list of dependencies
         self._deps.add(dt)
 
+    @classmethod
+    def _dot(cls):
+        # Need a helper to convert a DTestBase instance into a
+        # fully-qualified name
+        def mkname(dt):
+            if dt._class is not None:
+                return '.'.join(dt._test.__module__, dt._class,
+                                dt._test.__name__)
+            else:
+                return '.'.join(dt._test.__module__,
+                                dt._test.__name__)
+
+        # Now, create the graph
+        nodes = []
+        edges = []
+        for dt in cls._tests:
+            nname = mkname(dt)
+
+            # Make the node
+            if isinstance(dt, DTestFixture):
+                nodes.append('"%s" [label="%r",color="red"];' %
+                             (nname, dt._test))
+            else:
+                nodes.append('"%s" [label="%r"];' % (nname, dt._test))
+
+            # Make all the edges
+            for dep in dt._deps:
+                dname = mkname(dep)
+                if isinstance(dep, DTestFixture):
+                    edges.append('"%s" -> "%s" [color="red",style="dashed"];' %
+                                 (nname, dname))
+                else:
+                    edges.append('"%s" -> "%s";' % (nname, dname))
+
+        # Return a graph
+        return ('strict digraph "testdeps" {\n\t' +
+                '\n\t'.join(nodes) + '\n\n\t' + '\n\t'.join(edges) + '\n}')
+
 
 class DTest(DTestBase):
     def __int__(self):
