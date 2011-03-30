@@ -76,7 +76,7 @@ class DTestBase(object):
         # Perform preliminary call
         if self._pre is not None:
             with self._result.accumulate(result.PRE):
-                self._pre()
+                self._pre(*args, **kwargs)
 
         # Execute the test
         with self._result.accumulate(result.TEST):
@@ -86,7 +86,7 @@ class DTestBase(object):
         # exceptions)
         if self._post is not None:
             with self._result.accumulate(result.POST):
-                self._post()
+                self._post(*args, **kwargs)
 
         # Transition to the appropriate ending state
         self._state = COMPLETE if self._result else FAILED
