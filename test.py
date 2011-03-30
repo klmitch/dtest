@@ -1,4 +1,5 @@
 import re
+import sys
 
 from dtest import result
 from dtest import stream
@@ -228,12 +229,55 @@ def depends(*deps):
 class DTestCaseMeta(type):
     _testRE = re.compile(r'(?:^|[\b_\.-])[Tt]est')
 
+    @staticmethod
+    def _mod_fixtures(modname):
+        # Split up the module name
+        mods = modname.split('.')
+
+        # Now, walk up the tree
+        setUps = []
+        tearDowns = []
+        for i in range(len(mods)):
+            module = sys.modules['.'.join(mods[:i + 1])]
+
+            # Does the module have the fixture?
+            if hasattr(module, 'setUp'):
+                module.setUp = DTestFixture(module.setUp)
+                setUps.append(module.setUp)
+            if hasattr(module, 'tearDown'):
+                module.tearDown = DTestFixture(module.tearDown)
+                tearDowns.append(module.tearDown)
+
+        # Next, set up dependencies; each setUp() is dependent on all the
+        # ones before it...
+        for i in range(1, len(setUps)):
+            depends(setUps[:i])(setUps[i])
+
+        # While each tearDown() is dependent on all the ones after it...
+        for i in range(len(tearDowns) - 1):
+            depends(tearDowns[i + 1:])(tearDowns[i])
+
+        # Return the setUps and tearDowns
+        return (setUps, tearDowns)
+
     def __new__(mcs, name, bases, dict_):
-        # Look up any test fixtures
+        # Look up any test fixtures for the individual tests...
         setUp = dict_.get('setUp', None)
         tearDown = dict_.get('tearDown', None)
+
+        # Check for package- and module-level fixtures
+        setUps, tearDowns = _mod_fixtures(dict_['__module__'])
+
+        # And check for class-level fixtures
         setUpClass = DTestFixture(dict_.get('setUpClass', None))
+        if setUpClass is not None:
+            depends(setUps)(setUpClass)
+            setUps.append(setUpClass)
         tearDownClass = DTestFixture(dict_.get('tearDownClass', None))
+        if tearDownClass is not None:
+            for td in tearDowns:
+                depends(tearDownClass)(td)
+            tearDowns.append(tearDownClass)
 
         # Pre-transform the test fixtures
         updates = {}
@@ -246,12 +290,11 @@ class DTestCaseMeta(type):
         # match the test RE with instances of DTest
         for k, v in dict_:
             # If it has the _dt_nottest attribute set to True, skip it
-            if hasattr(v, '_dt_nottest') and v._dt_nottest:
+            if v[0] == '_' or hasattr(v, '_dt_nottest') and v._dt_nottest:
                 continue
 
             # If it's one of the test fixtures, skip it
-            if (k == 'setUp' or k == 'tearDown' or
-                k == 'setUpClass' or k == 'tearDownClass'):
+            if k in ('setUp', 'tearDown', 'setUpClass', 'tearDownClass'):
                 continue
 
             # Does it match the test RE?
@@ -272,11 +315,10 @@ class DTestCaseMeta(type):
             if v._post is None and tearDown is not None:
                 v.tearDown(tearDown)
 
-            # Do class-level fixtures as well
-            if setUpClass is not None:
-                depends(setUpClass)(v)
-            if tearDownClass is not None:
-                depends(v)(tearDownClass)
+            # Do package-, module-, and class-level fixtures as well
+            depends(setUps)(v)
+            for td in tearDowns:
+                depends(v)(td)
 
         # Update the dict_
         dict_.update(updates)
