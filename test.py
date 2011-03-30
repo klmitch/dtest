@@ -35,6 +35,7 @@ class DTestBase(object):
         # OK, construct a new one
         dt = super(DTestBase, cls).__new__(cls)
         dt._test = test
+        dt._class = None
         dt._exp_pass = True
         dt._skip = False
         dt._state = None
@@ -288,6 +289,7 @@ class DTestCaseMeta(type):
 
         # Now, we want to walk through dict_ and replace values that
         # match the test RE with instances of DTest
+        tests = []
         for k, v in dict_:
             # If it has the _dt_nottest attribute set to True, skip it
             if v[0] == '_' or hasattr(v, '_dt_nottest') and v._dt_nottest:
@@ -309,6 +311,9 @@ class DTestCaseMeta(type):
                 # Store an update for it
                 updates[k] = v
 
+            # Remember test for attaching class later
+            tests.append(v)
+
             # Attach fixtures as appropriate...
             if v._pre is None and setUp is not None:
                 v.setUp(setUp)
@@ -324,7 +329,11 @@ class DTestCaseMeta(type):
         dict_.update(updates)
 
         # Now that we've done the set-up, create the class
-        return super(DTestCaseMeta, mcs).__new__(mcs, name, bases, dict_)
+        cls = super(DTestCaseMeta, mcs).__new__(mcs, name, bases, dict_)
+
+        # Attach cls to all the tests
+        for t in tests:
+            t._class = cls
 
 
 class DTestCase(object):
