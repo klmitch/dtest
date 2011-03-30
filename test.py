@@ -154,14 +154,6 @@ class DTestBase(object):
         self._post = post
         return post
 
-    def add_dep(self, dep):
-        # First, we need to find the requisite DTest (fixtures can be
-        # passed in as DTestFixture instances to override)
-        dt = DTest(dep)
-
-        # Now simply add it to the list of dependencies
-        self._deps.add(dt)
-
     @classmethod
     def _dot(cls):
         # Need a helper to convert a DTestBase instance into a
