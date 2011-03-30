@@ -1,3 +1,6 @@
+from dtest import stream
+
+
 # Result origins
 PRE = 'PRE'    # Error in pre-execute fixture
 POST = 'POST'  # Error in post-execute fixture
