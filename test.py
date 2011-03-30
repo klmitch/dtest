@@ -189,6 +189,10 @@ class DTestBase(object):
         return ('strict digraph "testdeps" {\n\t' +
                 '\n\t'.join(nodes) + '\n\n\t' + '\n\t'.join(edges) + '\n}')
 
+    def _depcheck(self):
+        # Abstract method; subclasses must define!
+        raise Exception("Subclasses must implement _depcheck()")
+
     def _skipped(self):
         # Mark that this test has been skipped by transitioning the
         # state
@@ -202,9 +206,32 @@ class DTest(DTestBase):
         # count
         return 1
 
+    def _depcheck(self):
+        # All dependencies must be COMPLETED
+        for dep in self._deps:
+            if dep._state == FAILED:
+                # Set our own state to DEPFAILED
+                self._state = DEPFAILED
+                return False
+            elif dep._state != COMPLETED:
+                # Dependencies haven't finished up, yet
+                return False
+
+        # All dependencies satisfied!
+        return True
+
 
 class DTestFixture(DTestBase):
-    pass
+    def _depcheck(self):
+        # Dependencies must not be un-run or in the RUNNING state
+        for dep in self._deps:
+            if dep._state is None or dep._state == RUNNING:
+                return False
+
+        # Dependencies can have failed, failed due to dependencies,
+        # been skipped, or have completed--they just have to be in
+        # that state before running the fixture
+        return True
 
 
 def test(func):
