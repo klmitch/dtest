@@ -94,6 +94,9 @@ class DTestBase(object):
         # Transition to the appropriate ending state
         self._state = COMPLETE if self._result else FAILED
 
+        # Return the state
+        return self._result
+
     def __int__(self):
         # In an integer context, we're 0; this is how we can count the
         # number of tests
