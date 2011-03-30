@@ -27,7 +27,8 @@ class DTestBase(object):
             return test
 
         # Require it to be a callable...
-        if not callable(test):
+        if (not callable(test) and not isinstance(test, classmethod) and
+            not isinstance(test, staticmethod)):
             raise exceptions.TestException("%r must be a callable" % test)
 
         # Make sure we haven't already created one
@@ -165,28 +166,36 @@ class DTestBase(object):
     def _dot(cls):
         # Need a helper to convert a DTestBase instance into a
         # fully-qualified name
-        def mkname(dt):
+        def mkname(dt, test=None):
+            if test is None:
+                test = dt._test if callable(dt._test) else dt._test.__func__
+
             if dt._class is not None:
-                return '.'.join([dt._test.__module__, dt._class.__name__,
-                                 dt._test.__name__])
+                return '.'.join([test.__module__, dt._class.__name__,
+                                 test.__name__])
             else:
-                return '.'.join([dt._test.__module__,
-                                 dt._test.__name__])
+                return '.'.join([test.__module__,
+                                 test.__name__])
 
         # Now, create the graph
         nodes = []
         edges = []
         for dt in DTestBase._tests.values():
-            nname = mkname(dt)
+            # If it's not a callable, must be class or static method;
+            # get the real test
+            test = dt._test if callable(dt._test) else dt._test.__func__
+
+            # Get the name as well
+            nname = mkname(dt, test)
 
             # Make the node
             if isinstance(dt, DTestFixture):
                 nodes.append('"%(name)s" [label="%(name)s\\n%(func)r",'
                              'color="red"];' %
-                             dict(name=nname, func=dt._test))
+                             dict(name=nname, func=test))
             else:
                 nodes.append('"%(name)s" [label="%(name)s\\n%(func)r"];' %
-                             dict(name=nname, func=dt._test))
+                             dict(name=nname, func=test))
 
             # Make all the edges
             for dep in dt._deps:
@@ -415,13 +424,8 @@ class DTestCaseMeta(type):
 
         # Check for class-level set up
         if 'setUpClass' in dict_:
-            tmp = dict_['setUpClass']
-            if isinstance(tmp, classmethod) or isinstance(tmp, staticmethod):
-                setUpClass = DTestFixture(tmp.__func__)
-                updates['setUpClass'] = tmp.__class__(setUpClass)
-            else:
-                setUpClass = DTestFixture(tmp)
-                updates['setUpClass'] = setUpClass
+            setUpClass = DTestFixture(dict_['setUpClass'])
+            updates['setUpClass'] = setUpClass
 
             # Set up dependencies
             depends(*setUps)(setUpClass)
@@ -429,13 +433,8 @@ class DTestCaseMeta(type):
 
         # Check for class-level tear down
         if 'tearDownClass' in dict_:
-            tmp = dict_['tearDownClass']
-            if isinstance(tmp, classmethod) or isinstance(tmp, staticmethod):
-                tearDownClass = DTestFixture(tmp.__func__)
-                updates['tearDownClass'] = tmp.__class__(tearDownClass)
-            else:
-                tearDownClass = DTestFixture(tmp)
-                updates['tearDownClass'] = tearDownClass
+            tearDownClass = DTestFixture(dict_['tearDownClass'])
+            updates['tearDownClass'] = tearDownClass
 
             # Set up dependencies
             for td in tearDowns:
