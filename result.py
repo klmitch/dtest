@@ -71,6 +71,23 @@ class DTestResult(object):
         self._nextctx = nextctx
         return self
 
+    @property
+    def test(self):
+        # We want the test to be read-only, but to be accessed like an
+        # attribute
+        return self._test
+
+    @property
+    def msgs(self):
+        # Retrieve the messages in order
+        msglist = []
+        for mt in (PRE, TEST, POST):
+            if mt in self._msgs:
+                msglist.append(self._msgs[mt])
+
+        # Return the list of messages
+        return msglist
+
 
 class DTestMessage(object):
     def __init__(self, ctx, out, err, exc_type, exc_value, tb):
