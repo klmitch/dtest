@@ -45,6 +45,7 @@ class DTestBase(object):
         dt._pre = None
         dt._post = None
         dt._deps = set()
+        dt._revdeps = set()
         dt._attrs = {}
         dt._result = result.DTestResult(dt)
 
@@ -309,6 +310,10 @@ def depends(*deps):
 
         # Add the dependencies
         dt._deps |= set(deps)
+
+        # Add the reverse dependencies
+        for dep in deps:
+            dep._revdeps.add(dt)
 
         # Return the test
         return dt
