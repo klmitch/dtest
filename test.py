@@ -139,12 +139,16 @@ class DTestBase(object):
         return self._test
 
     def setUp(self, pre):
-        # Save the pre-test fixture
+        # Save the pre-test fixture.  This method can be used as a
+        # decorator.
         self._pre = pre
+        return pre
 
     def tearDown(self, post):
-        # Save the post-test fixture
+        # Save the post-test fixture.  This method can be used as a
+        # decorator.
         self._post = post
+        return post
 
     def add_dep(self, dep):
         # First, we need to find the requisite DTest (fixtures can be
