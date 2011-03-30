@@ -30,6 +30,8 @@ def pop():
     _stlocal.err.close()
     _stlocal.err = StringIO()
 
+    return out, err
+
 
 class StreamProxy(object):
     def __init__(self, stname):
