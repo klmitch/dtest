@@ -325,3 +325,7 @@ class DTestCaseMeta(type):
 
         # Now that we've done the set-up, create the class
         return super(DTestCaseMeta, mcs).__new__(mcs, name, bases, dict_)
+
+
+class DTestCase(object):
+    __metaclass__ = DTestCaseMeta
