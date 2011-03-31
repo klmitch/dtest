@@ -76,8 +76,6 @@ class DTestBase(object):
         del self._attrs[key]
 
     def __call__(self, *args, **kwargs):
-        print "I should not be getting called (1)!"
-        return
         # Transition to the running state
         self._state = RUNNING
 
@@ -448,8 +446,6 @@ def _visit_mod(mod):
 
 class DTestCaseMeta(type):
     def __new__(mcs, name, bases, dict_):
-        print "DTestCaseMeta.__new__(%r, %r, %r, %r)" % (mcs, name, bases, dict_)
-
         # Look up any test fixtures for the individual tests...
         setUp = dict_.get('setUp', None)
         tearDown = dict_.get('tearDown', None)
