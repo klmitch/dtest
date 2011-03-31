@@ -1,4 +1,5 @@
 from eventlet import spawn_n
+from eventlet.event import Event
 from eventlet.semaphore import Semaphore
 
 from dtest import test
@@ -32,6 +33,11 @@ class Queue(object):
         self.waiting = set([dt for dt in tests if dt.state != SKIPPED])
         self.waitlock = Semaphore()
 
+        # Count threads, and allocate an event to be signaled when the
+        # last thread exits
+        self.th_count = 0
+        self.th_event = Event()
+
     def check(self, test):
         with self.waitlock:
             # Is test waiting?
@@ -58,7 +64,17 @@ class Queue(object):
             if self.check(test):
                 spawn_n(self.run_test, test)
 
+        # Wait for all tests to finish
+        self.th_event.wait()
+
+        # For convenience, return the full list of tests, which will
+        # be searched for results
+        return self.tests
+
     def run_test(self, test):
+        # First step is to increment the thread count
+        self.th_count += 1
+
         # Acquire the semaphore
         if self.sem is not None:
             self.sem.acquire()
@@ -80,3 +96,10 @@ class Queue(object):
         # All right, we're done; release the semaphore
         if self.sem is not None:
             self.sem.release()
+
+        # Decrement the thread count
+        self.th_count -= 1
+
+        # If thread count is now 0, signal the event
+        if self.th_count == 0:
+            self.th_event.send()
