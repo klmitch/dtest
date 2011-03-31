@@ -211,8 +211,8 @@ class DTestBase(object):
     def _skipped(self):
         # Mark that this test has been skipped by transitioning the
         # state
-        if state is None:
-            state = SKIPPED
+        if self._state is None:
+            self._state = SKIPPED
 
             # Propagate up to tests dependent on us
             for dt in self._revdeps:
