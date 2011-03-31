@@ -77,7 +77,7 @@ class DTestBase(object):
 
     def __call__(self, *args, **kwargs):
         # Transition to the running state
-        self._state = RUNNING
+        self._transition(RUNNING)
 
         # Perform preliminary call
         if self._pre is not None:
@@ -95,7 +95,7 @@ class DTestBase(object):
                 self._post(*args, **kwargs)
 
         # Transition to the appropriate ending state
-        self._state = COMPLETE if self._result else FAILED
+        self._transition(COMPLETE if self._result else FAILED)
 
         # Return the result
         return self._result
@@ -230,7 +230,7 @@ class DTestBase(object):
         # Mark that this test has been skipped by transitioning the
         # state
         if self._state is None:
-            self._state = SKIPPED
+            self._transition(SKIPPED)
 
             # Propagate up to tests dependent on us
             for dt in self._revdeps:
@@ -245,6 +245,15 @@ class DTestBase(object):
         # has been skipped
         pass
 
+    def _transition(self, state):
+        # Issue a notification
+        #XXX
+        if isinstance(self, DTest) and state != RUNNING:
+            print >>sys.__stdout__, "%.*s %s" % (78 - len(state), self, state)
+
+        # Transition to the new state
+        self._state = state
+
 
 class DTest(DTestBase):
     def __int__(self):
@@ -257,11 +266,11 @@ class DTest(DTestBase):
         for dep in self._deps:
             if dep._state == FAILED:
                 # Set our own state to DEPFAILED
-                self._state = DEPFAILED
+                self._transition(DEPFAILED)
                 return False
             elif dep._state == SKIPPED:
                 # Set our own state to SKIPPED
-                self._state = SKIPPED
+                self._transition(SKIPPED)
                 return False
             elif dep._state != COMPLETED:
                 # Dependencies haven't finished up, yet
