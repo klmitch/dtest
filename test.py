@@ -119,6 +119,17 @@ class DTestBase(object):
         # Compare test objects
         return self._test is not other._test
 
+    def __str__(self):
+        # Generate a string name for the test
+        test = self._test if callable(self._test) else self._test.__func__
+
+        # Include the class name if applicable
+        if self._class is None:
+            return '.'.join([test.__module__, test.__name__])
+        else:
+            return '.'.join([test.__module__, self._class.__name__,
+                             test.__name__])
+
     def __repr__(self):
         # Generate a representation of the test
         return ('<%s.%s object at %#x wrapping %r>' %
@@ -157,18 +168,15 @@ class DTestBase(object):
 
     @classmethod
     def _dot(cls):
-        # Need a helper to convert a DTestBase instance into a
-        # fully-qualified name
-        def mkname(dt, test=None):
-            if test is None:
-                test = dt._test if callable(dt._test) else dt._test.__func__
+        # Helper to generate node and edge options
+        def mkopts(opts):
+            # If there are no options, return an empty string
+            if not opts:
+                return ''
 
-            if dt._class is not None:
-                return '.'.join([test.__module__, dt._class.__name__,
-                                 test.__name__])
-            else:
-                return '.'.join([test.__module__,
-                                 test.__name__])
+            # OK, let's do this...
+            return ' [' + ','.join(['%s="%s"' % (k, opts[k])
+                                    for k in opts]) + ']'
 
         # Now, create the graph
         nodes = []
@@ -178,27 +186,22 @@ class DTestBase(object):
             # get the real test
             test = dt._test if callable(dt._test) else dt._test.__func__
 
-            # Get the name as well
-            nname = mkname(dt, test)
-
             # Make the node
+            opts = dict(label=r'%s\n%r' % (dt, test))
             if isinstance(dt, DTestFixture):
-                nodes.append('"%(name)s" [label="%(name)s\\n%(func)r",'
-                             'color="red"];' %
-                             dict(name=nname, func=test))
-            else:
-                nodes.append('"%(name)s" [label="%(name)s\\n%(func)r"];' %
-                             dict(name=nname, func=test))
+                opts['color'] = 'red'
+            if dt._state == SKIPPED:
+                opts['style'] = 'dotted'
+            nodes.append('"%s"%s;' % (dt, mkopts(opts)))
 
             # Make all the edges
             for dep in dt._deps:
-                dname = mkname(dep)
+                opts = {}
                 if (isinstance(dt, DTestFixture) or
                     isinstance(dep, DTestFixture)):
-                    edges.append('"%s" -> "%s" [color="red",style="dashed"];' %
-                                 (nname, dname))
-                else:
-                    edges.append('"%s" -> "%s";' % (nname, dname))
+                    opts.update(dict(color='red', style='dashed'))
+
+                edges.append('"%s" -> "%s"%s;' % (dt, dep, mkopts(opts)))
 
         # Return a graph
         return ('strict digraph "testdeps" {\n\t' +
