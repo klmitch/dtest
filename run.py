@@ -30,21 +30,23 @@ class Queue(object):
         # Some tests may have moved to the SKIPPED state due to
         # dependencies, so filter them out
         self.waiting = set([dt for dt in tests if dt.state != SKIPPED])
+        self.waitlock = Semaphore()
 
     def check(self, test):
-        # Is test waiting?
-        if test not in self.waiting:
-            return False
+        with self.waitlock:
+            # Is test waiting?
+            if test not in self.waiting:
+                return False
 
-        # OK, check dependencies
-        elif test._depcheck():
-            self.waiting.remove(test)
-            return True
+            # OK, check dependencies
+            elif test._depcheck():
+                self.waiting.remove(test)
+                return True
 
-        # Dependencies failed; check if state changed (i.e., to
-        # DEPFAILED)
-        elif test.state is not None:
-            self.waiting.remove(test)
+            # Dependencies failed; check if state changed (i.e., to
+            # DEPFAILED)
+            elif test.state is not None:
+                self.waiting.remove(test)
 
         # Test isn't ready to run
         return False
