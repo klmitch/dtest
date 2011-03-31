@@ -52,7 +52,7 @@ class Queue(object):
     def run(self):
         # Walk through all the waiting tests; note the copy, to avoid
         # modifications to self.waiting from upsetting us
-        for test in self.waiting:
+        for test in list(self.waiting):
             if self.check(test):
                 spawn_n(self.run_test, test)
 
