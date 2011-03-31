@@ -152,6 +152,18 @@ class DTestBase(object):
         # attribute
         return self._test
 
+    @property
+    def class_(self):
+        # We want the test's class to be read-only, but to be accessed
+        # like an attribute
+        return self._class
+
+    @property
+    def dependents(self):
+        # We want the depedenents to be read-only, but to be accessed
+        # like an attribute
+        return frozenset(self._revdeps)
+
     def setUp(self, pre):
         # Save the pre-test fixture.  This method can be used as a
         # decorator.
@@ -204,6 +216,11 @@ class DTestBase(object):
         # Return a graph
         return ('strict digraph "testdeps" {\n\t' +
                 '\n\t'.join(nodes) + '\n\n\t' + '\n\t'.join(edges) + '\n}')
+
+    @classmethod
+    def tests(cls):
+        # Return the list of all tests
+        return cls._tests.values()
 
     def _depcheck(self):
         # Abstract method; subclasses must define!
