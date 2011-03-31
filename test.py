@@ -214,6 +214,19 @@ class DTestBase(object):
         if state is None:
             state = SKIPPED
 
+            # Propagate up to tests dependent on us
+            for dt in self._revdeps:
+                dt._skipped()
+
+            # Also notify tests we're dependent on
+            for dt in self._deps:
+                dt._notify_skipped()
+
+    def _notify_skipped(self):
+        # Regular tests don't care that some test dependent on them
+        # has been skipped
+        pass
+
 
 class DTest(DTestBase):
     def __int__(self):
@@ -251,6 +264,27 @@ class DTestFixture(DTestBase):
         # been skipped, or have completed--they just have to be in
         # that state before running the fixture
         return True
+
+    def _skipped(self):
+        # Only bother if all our dependencies are also skipped--tear
+        # down fixtures need to run any time the corresponding set up
+        # fixtures have run
+        for dep in self._deps:
+            if dep._state != SKIPPED:
+                return
+
+        # Call the superclass method
+        super(DTestFixture, self)._skipped()
+
+    def _notify_skipped(self):
+        # If all tests dependent on us have been skipped, we don't
+        # need to run
+        for dep in self._revdeps:
+            if dep._state != SKIPPED:
+                return
+
+        # Call the superclass's _skipped() method
+        super(DTestFixture, self)._skipped()
 
 
 def istest(func):
