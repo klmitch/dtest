@@ -262,7 +262,7 @@ class DTest(DTestBase):
         return 1
 
     def _depcheck(self):
-        # All dependencies must be COMPLETED
+        # All dependencies must be COMPLETE
         for dep in self._deps:
             if dep._state == FAILED:
                 # Set our own state to DEPFAILED
@@ -272,7 +272,7 @@ class DTest(DTestBase):
                 # Set our own state to SKIPPED
                 self._transition(SKIPPED)
                 return False
-            elif dep._state != COMPLETED:
+            elif dep._state != COMPLETE:
                 # Dependencies haven't finished up, yet
                 return False
 
