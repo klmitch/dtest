@@ -1,13 +1,19 @@
-from eventlet import spawn_n
+import traceback
+
+from eventlet import spawn_n, monkey_patch
 from eventlet.event import Event
 from eventlet.semaphore import Semaphore
 
 from dtest.constants import *
+from dtest import stream
 from dtest import test
 
 
+DEF_LINEWIDTH = 78
+
+
 class Queue(object):
-    def __init__(self, maxth=None, skip=lambda dt: dt._skip):
+    def __init__(self, maxth=None, skip=None):
         # maxth allows us to limit the number of simultaneously
         # executing threads
         if maxth is None:
@@ -83,9 +89,8 @@ class Queue(object):
         if self.th_count > 0:
             self.th_event.wait()
 
-        # For convenience, return the full list of tests, which will
-        # be searched for results
-        return self.tests
+        # For convenience, return the full list of results
+        return [t.result for t in self.tests]
 
     def run_test(self, test):
         # Acquire the semaphore
@@ -115,3 +120,74 @@ class Queue(object):
         with self.waitlock:
             if len(self.waiting) == 0 and self.th_count == 0:
                 self.th_event.send()
+
+
+def _msg(test, m=None, hdr=''):
+    # Determine line width
+    lw = DEF_LINEWIDTH
+
+    # Output the banner if m is None
+    if m is None:
+        print "=" * lw
+        print str(test).center(lw)
+        print "=" * lw
+        return
+
+    # Output header information
+    if hdr:
+        print hdr.center(lw)
+        print '-' * lw
+
+    # Format exception information
+    if m.exc_type is not None:
+        # Emit the exception information
+        print (' Exception %s ' % m.exc_type.__name__).center(lw, '-')
+        traceback.print_exception(m.exc_type, m.exc_value, m.exc_tb)
+
+    # Format output data
+    if m.out:
+        print ' Standard Output '.center(lw, '-')
+        print m.out.rstrip()
+
+    # Format error data
+    if m.err:
+        print ' Standard Error '.center(lw, '-')
+        print m.err.rstrip()
+
+    # Emit a closing line
+    print '-' * lw
+
+
+def run(maxth=None, skip=lambda dt: dt._skip, msg=_msg):
+    # Let's begin by making sure we're monkey-patched
+    monkey_patch()
+
+    # Now, initialize the test queue...
+    q = Queue(maxth=maxth, skip=skip)
+
+    # Install the stream proxy...
+    stream.install()
+
+    # Run the tests
+    results = q.run()
+
+    # Uninstall the stream proxy
+    stream.uninstall()
+
+    # Walk through the tests and output the results
+    for r in results:
+        if len(r) > 0:
+            # Emit the header
+            msg(r.test)
+
+            # Emit data from the pre-test fixture...
+            if PRE in r:
+                msg(r.test, r[PRE], 'Pre-test Fixture')
+
+            # ...from the test itself...
+            if TEST in r:
+                msg(r.test, r[TEST])
+
+            # ...and from the post-test fixture
+            if POST in r:
+                msg(r.test, r[POST], 'Post-test Fixture')
