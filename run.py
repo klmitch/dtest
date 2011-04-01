@@ -128,6 +128,7 @@ def _msg(test, m=None, hdr=''):
 
     # Output the banner if m is None
     if m is None:
+        print
         print "=" * lw
         print str(test).center(lw)
         print "=" * lw
