@@ -1,3 +1,4 @@
+import sys
 import traceback
 
 from eventlet import spawn_n, monkey_patch
@@ -13,7 +14,7 @@ DEF_LINEWIDTH = 78
 
 
 class Queue(object):
-    def __init__(self, maxth=None, skip=None):
+    def __init__(self, maxth, skip, notify):
         # maxth allows us to limit the number of simultaneously
         # executing threads
         if maxth is None:
@@ -31,7 +32,7 @@ class Queue(object):
         for dt in self.tests:
             # Do we skip this one?
             if skip(dt):
-                dt._skipped()
+                dt._skipped(notify)
             else:
                 waiting.append(dt)
 
@@ -45,7 +46,7 @@ class Queue(object):
         self.th_count = 0
         self.th_event = Event()
 
-    def spawn(self, tests):
+    def spawn(self, tests, notify):
         # Work with a copy of the tests
         tests = list(tests)
 
@@ -60,13 +61,13 @@ class Queue(object):
                     continue
 
                 # OK, check dependencies
-                elif test._depcheck():
+                elif test._depcheck(notify):
                     # No longer waiting
                     self.waiting.remove(test)
 
                     # Spawn the test
                     self.th_count += 1
-                    spawn_n(self.run_test, test)
+                    spawn_n(self.run_test, test, notify)
 
                 # Dependencies failed; check if state changed and add
                 # its dependents if so
@@ -80,10 +81,10 @@ class Queue(object):
                     # the state change
                     tests.extend(list(test.dependents))
 
-    def run(self):
+    def run(self, notify):
         # Walk through all the waiting tests; note the copy, to avoid
         # modifications to self.waiting from upsetting us
-        self.spawn(self.waiting)
+        self.spawn(self.waiting, notify)
 
         # Wait for all tests to finish
         if self.th_count > 0:
@@ -92,7 +93,7 @@ class Queue(object):
         # For convenience, return the full list of tests
         return self.tests
 
-    def run_test(self, test):
+    def run_test(self, test, notify):
         # Acquire the semaphore
         if self.sem is not None:
             self.sem.acquire()
@@ -104,10 +105,10 @@ class Queue(object):
             args.append(test.class_())
 
         # Execute the test
-        test(*args)
+        test(*args, _notify=notify)
 
         # Now, walk through its dependents and check readiness
-        self.spawn(test.dependents)
+        self.spawn(test.dependents, notify)
 
         # All right, we're done; release the semaphore
         if self.sem is not None:
@@ -183,19 +184,36 @@ def _summary(counts):
         print "  %d tests failed (%s)" % (total, ', '.join(bd))
 
 
+def _notify(test, state):
+    lw = DEF_LINEWIDTH
+
+    # Determine the name of the test
+    name = str(test)
+
+    # Determine the width of the test name field
+    width = lw - len(state) - 1
+
+    # Truncate the name, if necessary
+    if len(name) > width:
+        name = name[:width - 3] + '...'
+
+    # Emit the status message
+    print >>sys.__stdout__, "%-*s %s" % (width, name, state)
+
+
 def run_tests(maxth=None, skip=lambda dt: dt.skip,
-              msg=_msg, summary=_summary):
+              notify=_notify, msg=_msg, summary=_summary):
     # Let's begin by making sure we're monkey-patched
     monkey_patch()
 
     # Now, initialize the test queue...
-    q = Queue(maxth=maxth, skip=skip)
+    q = Queue(maxth, skip, notify)
 
     # Install the stream proxy...
     stream.install()
 
     # Run the tests
-    tests = q.run()
+    tests = q.run(notify)
 
     # Uninstall the stream proxy
     stream.uninstall()

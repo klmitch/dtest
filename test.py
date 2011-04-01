@@ -83,6 +83,11 @@ class DTestBase(object):
             # Now call it
             return method(*args, **kwargs)
 
+        # Extract the notification
+        notify = kwargs.get('_notify')
+        if '_notify' in kwargs:
+            del kwargs['_notify']
+
         # Transition to the running state
         self._transition(RUNNING)
 
@@ -102,7 +107,7 @@ class DTestBase(object):
                 do_call(self._post, args, kwargs)
 
         # Transition to the appropriate ending state
-        self._transition(self._result._state())
+        self._transition(self._result._state(), notify)
 
         # Return the result
         return self._result
@@ -235,34 +240,33 @@ class DTestBase(object):
         # Return the list of all tests
         return cls._tests.values()
 
-    def _depcheck(self):
+    def _depcheck(self, notify):
         # Abstract method; subclasses must define!
         raise Exception("Subclasses must implement _depcheck()")
 
-    def _skipped(self):
+    def _skipped(self, notify):
         # Mark that this test has been skipped by transitioning the
         # state
         if self._state is None:
-            self._transition(SKIPPED)
+            self._transition(SKIPPED, notify)
 
             # Propagate up to tests dependent on us
             for dt in self._revdeps:
-                dt._skipped()
+                dt._skipped(notify)
 
             # Also notify tests we're dependent on
             for dt in self._deps:
-                dt._notify_skipped()
+                dt._notify_skipped(notify)
 
-    def _notify_skipped(self):
+    def _notify_skipped(self, notify):
         # Regular tests don't care that some test dependent on them
         # has been skipped
         pass
 
-    def _transition(self, state):
+    def _transition(self, state, notify=None):
         # Issue a notification
-        #XXX
-        if isinstance(self, DTest) and state != RUNNING:
-            print >>sys.__stdout__, "%-*s %s" % (78 - len(state), self, state)
+        if notify is not None and isinstance(self, DTest) and state != RUNNING:
+            notify(self, state)
 
         # Transition to the new state
         self._state = state
@@ -274,17 +278,17 @@ class DTest(DTestBase):
         # count
         return 1
 
-    def _depcheck(self):
+    def _depcheck(self, notify):
         # All dependencies must be OK
         for dep in self._deps:
             if (dep._state == FAIL or dep._state == ERROR or
                 dep._state == DEPFAIL):
                 # Set our own state to DEPFAIL
-                self._transition(DEPFAIL)
+                self._transition(DEPFAIL, notify)
                 return False
             elif dep._state == SKIPPED:
                 # Set our own state to SKIPPED
-                self._transition(SKIPPED)
+                self._transition(SKIPPED, notify)
                 return False
             elif dep._state != OK:
                 # Dependencies haven't finished up, yet
@@ -306,18 +310,18 @@ class DTestFixture(DTestBase):
         # Now, save our pair partner
         self._partner = setUp
 
-    def _depcheck(self):
+    def _depcheck(self, notify):
         # Make sure our partner succeeded
         if self._partner is not None:
             if (self._partner._state == FAIL or
                 self._partner._state == ERROR or
                 self._partner._state == DEPFAIL):
                 # Set our own state to DEPFAIL
-                self._transition(DEPFAIL)
+                self._transition(DEPFAIL, notify)
                 return False
             elif self._partner._state == SKIPPED:
                 # Set our own state to SKIPPED
-                self._transition(SKIPPED)
+                self._transition(SKIPPED, notify)
                 return False
 
         # Other dependencies must not be un-run or in the RUNNING
@@ -331,7 +335,7 @@ class DTestFixture(DTestBase):
         # that state before running the fixture
         return True
 
-    def _skipped(self):
+    def _skipped(self, notify):
         # Only bother if all our dependencies are also skipped--tear
         # down fixtures need to run any time the corresponding set up
         # fixtures have run
@@ -340,9 +344,9 @@ class DTestFixture(DTestBase):
                 return
 
         # Call the superclass method
-        super(DTestFixture, self)._skipped()
+        super(DTestFixture, self)._skipped(notify)
 
-    def _notify_skipped(self):
+    def _notify_skipped(self, notify):
         # If all tests dependent on us have been skipped, we don't
         # need to run
         for dep in self._revdeps:
@@ -350,7 +354,7 @@ class DTestFixture(DTestBase):
                 return
 
         # Call the superclass's _skipped() method
-        super(DTestFixture, self)._skipped()
+        super(DTestFixture, self)._skipped(notify)
 
 
 def istest(func):
