@@ -5,8 +5,8 @@ from eventlet import spawn_n, monkey_patch
 from eventlet.event import Event
 from eventlet.semaphore import Semaphore
 
+from dtest import capture
 from dtest.constants import *
-from dtest import stream
 from dtest import test
 
 
@@ -147,14 +147,9 @@ def _msg(test, m=None, hdr=''):
         traceback.print_exception(m.exc_type, m.exc_value, m.exc_tb)
 
     # Format output data
-    if m.out:
-        print ' Standard Output '.center(lw, '-')
-        print m.out.rstrip()
-
-    # Format error data
-    if m.err:
-        print ' Standard Error '.center(lw, '-')
-        print m.err.rstrip()
+    for name, desc, value in m.captured:
+        print (' %s ' % desc).center(lw, '-')
+        print value.rstrip()
 
     # Emit a closing line
     print '-' * lw
@@ -209,14 +204,14 @@ def run_tests(maxth=None, skip=lambda dt: dt.skip,
     # Now, initialize the test queue...
     q = Queue(maxth, skip, notify)
 
-    # Install the stream proxy...
-    stream.install()
+    # Install the capture proxies...
+    capture.install()
 
     # Run the tests
     tests = q.run(notify)
 
-    # Uninstall the stream proxy
-    stream.uninstall()
+    # Uninstall the capture proxies
+    capture.uninstall()
 
     # Walk through the tests and output the results
     cnt = {

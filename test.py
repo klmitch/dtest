@@ -4,7 +4,6 @@ import sys
 from dtest.constants import *
 from dtest import exceptions
 from dtest import result
-from dtest import stream
 
 
 class DTestBase(object):

@@ -1,5 +1,5 @@
+from dtest import capture
 from dtest.constants import *
-from dtest import stream
 
 
 class DTestResult(object):
@@ -15,12 +15,12 @@ class DTestResult(object):
         # Set up the context
         self._ctx = self._nextctx
 
-        # Clear the streams for this thread
-        stream.pop()
+        # Clear the captured values for this thread
+        capture.retrieve()
 
     def __exit__(self, exc_type, exc_value, tb):
         # Get the output and clean up
-        outdata, errdata = stream.pop()
+        captured = capture.retrieve()
 
         # If this was the test, determine a result
         if self._ctx == TEST:
@@ -28,9 +28,8 @@ class DTestResult(object):
             self._error = exc_type is not None and exc_type != AssertionError
 
         # Generate a message, if necessary
-        if outdata or errdata or exc_type or exc_value or tb:
-            self._msgs[self._ctx] = DTestMessage(self._ctx,
-                                                 outdata, errdata,
+        if captured or exc_type or exc_value or tb:
+            self._msgs[self._ctx] = DTestMessage(self._ctx, captured,
                                                  exc_type, exc_value, tb)
 
         # Clean up the context
@@ -96,11 +95,10 @@ class DTestResult(object):
 
 
 class DTestMessage(object):
-    def __init__(self, ctx, out, err, exc_type, exc_value, tb):
+    def __init__(self, ctx, captured, exc_type, exc_value, tb):
         # Save all the message information
         self.ctx = ctx
-        self.out = out
-        self.err = err
+        self.captured = captured
         self.exc_type = exc_type
         self.exc_value = exc_value
         self.exc_tb = tb
