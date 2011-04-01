@@ -36,7 +36,7 @@ def pop():
 class StreamProxy(object):
     def __init__(self, stname):
         # Save the stream name of interest
-        self._stname = stname
+        super(StreamProxy, self).__setattr__('_stname', stname)
 
     def __getattr__(self, attr):
         # Proxy out to the appropriate stream
@@ -73,6 +73,7 @@ def install():
 
 
 def uninstall():
+    global _installed
     global _save_out
     global _save_err
 
