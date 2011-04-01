@@ -195,47 +195,6 @@ class DTestBase(object):
         return post
 
     @classmethod
-    def _dot(cls):
-        # Helper to generate node and edge options
-        def mkopts(opts):
-            # If there are no options, return an empty string
-            if not opts:
-                return ''
-
-            # OK, let's do this...
-            return ' [' + ','.join(['%s="%s"' % (k, opts[k])
-                                    for k in opts]) + ']'
-
-        # Now, create the graph
-        nodes = []
-        edges = []
-        for dt in DTestBase._tests.values():
-            # If it's not a callable, must be class or static method;
-            # get the real test
-            test = dt._test if callable(dt._test) else dt._test.__func__
-
-            # Make the node
-            opts = dict(label=r'%s\n%r' % (dt, test))
-            if isinstance(dt, DTestFixture):
-                opts['color'] = 'red'
-            if dt._state == SKIPPED:
-                opts['style'] = 'dotted'
-            nodes.append('"%s"%s;' % (dt, mkopts(opts)))
-
-            # Make all the edges
-            for dep in dt._deps:
-                opts = {}
-                if (isinstance(dt, DTestFixture) or
-                    isinstance(dep, DTestFixture)):
-                    opts.update(dict(color='red', style='dashed'))
-
-                edges.append('"%s" -> "%s"%s;' % (dt, dep, mkopts(opts)))
-
-        # Return a graph
-        return ('strict digraph "testdeps" {\n\t' +
-                '\n\t'.join(nodes) + '\n\n\t' + '\n\t'.join(edges) + '\n}')
-
-    @classmethod
     def tests(cls):
         # Return the list of all tests
         return cls._tests.values()
@@ -616,3 +575,44 @@ class DTestCaseMeta(type):
 
 class DTestCase(object):
     __metaclass__ = DTestCaseMeta
+
+
+def dot(grname='testdeps'):
+    # Helper to generate node and edge options
+    def mkopts(opts):
+        # If there are no options, return an empty string
+        if not opts:
+            return ''
+
+        # OK, let's do this...
+        return ' [' + ','.join(['%s="%s"' % (k, opts[k])
+                                for k in opts]) + ']'
+
+    # Now, create the graph
+    nodes = []
+    edges = []
+    for dt in DTestBase._tests.values():
+        # If it's not a callable, must be class or static method;
+        # get the real test
+        test = dt._test if callable(dt._test) else dt._test.__func__
+
+        # Make the node
+        opts = dict(label=r'%s\n%r' % (dt, test))
+        if isinstance(dt, DTestFixture):
+            opts['color'] = 'red'
+        if dt._state == SKIPPED:
+            opts['style'] = 'dotted'
+        nodes.append('"%s"%s;' % (dt, mkopts(opts)))
+
+        # Make all the edges
+        for dep in dt._deps:
+            opts = {}
+            if (isinstance(dt, DTestFixture) or
+                isinstance(dep, DTestFixture)):
+                opts.update(dict(color='red', style='dashed'))
+
+            edges.append('"%s" -> "%s"%s;' % (dt, dep, mkopts(opts)))
+
+    # Return a graph
+    return (('strict digraph "%s" {\n\t' % grname) +
+            '\n\t'.join(nodes) + '\n\n\t' + '\n\t'.join(edges) + '\n}')
