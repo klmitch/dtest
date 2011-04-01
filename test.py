@@ -166,6 +166,12 @@ class DTestBase(object):
         return self._class
 
     @property
+    def skip(self):
+        # We want the test's skip setting to be read-only, but to be
+        # accessed like an attribute
+        return self._skip
+
+    @property
     def dependents(self):
         # We want the depedenents to be read-only, but to be accessed
         # like an attribute

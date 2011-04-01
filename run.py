@@ -183,7 +183,7 @@ def _summary(counts):
         print "  %d tests failed (%s)" % (total, ', '.join(bd))
 
 
-def run_tests(maxth=None, skip=lambda dt: dt._skip,
+def run_tests(maxth=None, skip=lambda dt: dt.skip,
               msg=_msg, summary=_summary):
     # Let's begin by making sure we're monkey-patched
     monkey_patch()
