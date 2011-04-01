@@ -89,8 +89,8 @@ class Queue(object):
         if self.th_count > 0:
             self.th_event.wait()
 
-        # For convenience, return the full list of results
-        return [t.result for t in self.tests]
+        # For convenience, return the full list of tests
+        return self.tests
 
     def run_test(self, test):
         # Acquire the semaphore
@@ -159,7 +159,32 @@ def _msg(test, m=None, hdr=''):
     print '-' * lw
 
 
-def run_tests(maxth=None, skip=lambda dt: dt._skip, msg=_msg):
+def _summary(counts):
+    # Emit summary data
+    print "%d tests run" % counts['total']
+    if counts[OK] > 0:
+        print "  %d tests successful" % counts[OK]
+    if counts[SKIPPED] > 0:
+        print "  %d tests skipped" % counts[SKIPPED]
+    if counts[FAIL] + counts[ERROR] + counts[DEPFAIL] > 0:
+        # Set up the breakdown
+        bd = []
+        total = 0
+        if counts[FAIL] > 0:
+            bd.append('%d failed' % counts[FAIL])
+            total += counts[FAIL]
+        if counts[ERROR] > 0:
+            bd.append('%d errors' % counts[ERROR])
+            total += counts[ERROR]
+        if counts[DEPFAIL] > 0:
+            bd.append('%d failed due to dependencies' % counts[DEPFAIL])
+            total += counts[DEPFAIL]
+
+        print "  %d tests failed (%s)" % (total, ', '.join(bd))
+
+
+def run_tests(maxth=None, skip=lambda dt: dt._skip,
+              msg=_msg, summary=_summary):
     # Let's begin by making sure we're monkey-patched
     monkey_patch()
 
@@ -170,13 +195,28 @@ def run_tests(maxth=None, skip=lambda dt: dt._skip, msg=_msg):
     stream.install()
 
     # Run the tests
-    results = q.run()
+    tests = q.run()
 
     # Uninstall the stream proxy
     stream.uninstall()
 
     # Walk through the tests and output the results
-    for r in results:
+    cnt = {
+        OK: 0,
+        SKIPPED: 0,
+        FAIL: 0,
+        ERROR: 0,
+        DEPFAIL: 0,
+        'total': 0,
+        }
+    for t in tests:
+        # Update the counts
+        cnt[t.state] += int(t)
+        cnt['total'] += int(t)
+
+        # Get the test result
+        r = t.result
+
         if len(r) > 0:
             # Emit the header
             msg(r.test)
@@ -192,3 +232,6 @@ def run_tests(maxth=None, skip=lambda dt: dt._skip, msg=_msg):
             # ...and from the post-test fixture
             if POST in r:
                 msg(r.test, r[POST], 'Post-test Fixture')
+
+    # Emit summary data
+    summary(cnt)
