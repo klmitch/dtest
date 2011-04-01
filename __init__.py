@@ -1,10 +1,12 @@
-from dtest.exceptions import DTestException
 from dtest.constants import *
+from dtest.exceptions import DTestException
+from dtest.run import run
 from dtest.test import istest, nottest, skip, failing, attr, depends, \
     DTestCase
 
-__all__ = ['DTestException',
-           'PRE', 'POST', 'TEST',
+__all__ = ['PRE', 'POST', 'TEST',
            'RUNNING', 'FAIL', 'ERROR', 'DEPFAIL', 'OK', 'SKIPPED',
+           'DTestException',
+           'run',
            'istest', 'nottest', 'skip', 'failing', 'attr', 'depends',
            'DTestCase']
