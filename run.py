@@ -159,7 +159,7 @@ def _msg(test, m=None, hdr=''):
     print '-' * lw
 
 
-def run(maxth=None, skip=lambda dt: dt._skip, msg=_msg):
+def run_tests(maxth=None, skip=lambda dt: dt._skip, msg=_msg):
     # Let's begin by making sure we're monkey-patched
     monkey_patch()
 
