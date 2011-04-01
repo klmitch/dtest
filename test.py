@@ -32,7 +32,6 @@ class DTestBase(object):
         dt = super(DTestBase, cls).__new__(cls)
         dt._test = test
         dt._class = None
-        dt._exp_pass = True
         dt._skip = False
         dt._state = None
         dt._pre = None
@@ -333,17 +332,6 @@ def skip(func):
 
     # Set up to skip it
     dt._skip = True
-
-    # Return the test
-    return dt
-
-
-def failing(func):
-    # Get the DTest object for the test
-    dt = DTest(func)
-
-    # Set up to expect it to fail
-    dt._exp_pass = False
 
     # Return the test
     return dt
