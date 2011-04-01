@@ -2,6 +2,7 @@ from eventlet import spawn_n
 from eventlet.event import Event
 from eventlet.semaphore import Semaphore
 
+from dtest.constants import *
 from dtest import test
 
 
@@ -30,7 +31,7 @@ class Queue(object):
 
         # Some tests may have moved to the SKIPPED state due to
         # dependencies, so filter them out
-        self.waiting = set([dt for dt in tests if dt.state != SKIPPED])
+        self.waiting = set([dt for dt in self.tests if dt.state != SKIPPED])
         self.waitlock = Semaphore()
 
         # Count threads, and allocate an event to be signaled when the
@@ -38,43 +39,55 @@ class Queue(object):
         self.th_count = 0
         self.th_event = Event()
 
-    def check(self, test):
-        with self.waitlock:
-            # Is test waiting?
-            if test not in self.waiting:
-                return False
+    def spawn(self, tests):
+        # Work with a copy of the tests
+        tests = list(tests)
 
-            # OK, check dependencies
-            elif test._depcheck():
-                self.waiting.remove(test)
-                return True
+        # Loop through the list
+        while tests:
+            # Pop off a test to consider
+            test = tests.pop(0)
 
-            # Dependencies failed; check if state changed (i.e., to
-            # DEPFAILED)
-            elif test.state is not None:
-                self.waiting.remove(test)
+            with self.waitlock:
+                # Is test waiting?
+                if test not in self.waiting:
+                    continue
 
-        # Test isn't ready to run
-        return False
+                # OK, check dependencies
+                elif test._depcheck():
+                    # No longer waiting
+                    self.waiting.remove(test)
+
+                    # Spawn the test
+                    self.th_count += 1
+                    spawn_n(self.run_test, test)
+
+                # Dependencies failed; check if state changed and add
+                # its dependents if so
+                elif test.state is not None:
+                    # No longer waiting
+                    self.waiting.remove(test)
+
+                    # Check all its dependents.  Note--not trying to
+                    # remove duplicates, because some formerly
+                    # unrunnable tests may now be runnable because of
+                    # the state change
+                    tests.extend(list(test.dependents))
 
     def run(self):
         # Walk through all the waiting tests; note the copy, to avoid
         # modifications to self.waiting from upsetting us
-        for test in list(self.waiting):
-            if self.check(test):
-                spawn_n(self.run_test, test)
+        self.spawn(self.waiting)
 
         # Wait for all tests to finish
-        self.th_event.wait()
+        if self.th_count > 0:
+            self.th_event.wait()
 
         # For convenience, return the full list of tests, which will
         # be searched for results
         return self.tests
 
     def run_test(self, test):
-        # First step is to increment the thread count
-        self.th_count += 1
-
         # Acquire the semaphore
         if self.sem is not None:
             self.sem.acquire()
@@ -89,9 +102,7 @@ class Queue(object):
         test(*args)
 
         # Now, walk through its dependents and check readiness
-        for dep in test.dependents:
-            if self.check(dep):
-                spawn_n(self.run_test, dep)
+        self.spawn(test.dependents)
 
         # All right, we're done; release the semaphore
         if self.sem is not None:
@@ -101,5 +112,6 @@ class Queue(object):
         self.th_count -= 1
 
         # If thread count is now 0, signal the event
-        if self.th_count == 0:
-            self.th_event.send()
+        with self.waitlock:
+            if len(self.waiting) == 0 and self.th_count == 0:
+                self.th_event.send()

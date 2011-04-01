@@ -1,17 +1,10 @@
 import re
 import sys
 
+from dtest.constants import *
 from dtest import exceptions
 from dtest import result
 from dtest import stream
-
-
-# Test states
-RUNNING = 'RUNNING'      # test running
-FAILED = 'FAILED'        # test failed
-DEPFAILED = 'DEPFAILED'  # dependency failed
-COMPLETE = 'COMPLETE'    # test completed
-SKIPPED = 'SKIPPED'      # test was skipped
 
 
 class DTestBase(object):
@@ -29,7 +22,7 @@ class DTestBase(object):
         # Require it to be a callable...
         if (not callable(test) and not isinstance(test, classmethod) and
             not isinstance(test, staticmethod)):
-            raise exceptions.TestException("%r must be a callable" % test)
+            raise exceptions.DTestException("%r must be a callable" % test)
 
         # Make sure we haven't already created one
         if test in DTestBase._tests:
@@ -46,6 +39,7 @@ class DTestBase(object):
         dt._post = None
         dt._deps = set()
         dt._revdeps = set()
+        dt._partner = None
         dt._attrs = {}
         dt._result = result.DTestResult(dt)
 
@@ -76,26 +70,39 @@ class DTestBase(object):
         del self._attrs[key]
 
     def __call__(self, *args, **kwargs):
+        # Need a helper to unwrap and call class methods and static
+        # methods
+        def do_call(method, args, kwargs):
+            if not callable(method):
+                # Have to unwrap it
+                method = method.__get__(args[0], args[0].__class__)
+
+                # The first argument is now taken care of
+                args = args[1:]
+
+            # Now call it
+            return method(*args, **kwargs)
+
         # Transition to the running state
         self._transition(RUNNING)
 
         # Perform preliminary call
         if self._pre is not None:
-            with self._result.accumulate(result.PRE):
-                self._pre(*args, **kwargs)
+            with self._result.accumulate(PRE):
+                do_call(self._pre, args, kwargs)
 
         # Execute the test
-        with self._result.accumulate(result.TEST):
-            self._test(*args, **kwargs)
+        with self._result.accumulate(TEST):
+            do_call(self._test, args, kwargs)
 
         # Invoke any clean-up that's necessary (regardless of
         # exceptions)
         if self._post is not None:
-            with self._result.accumulate(result.POST):
-                self._post(*args, **kwargs)
+            with self._result.accumulate(POST):
+                do_call(self._post, args, kwargs)
 
         # Transition to the appropriate ending state
-        self._transition(COMPLETE if self._result else FAILED)
+        self._transition(self._result._state())
 
         # Return the result
         return self._result
@@ -249,7 +256,7 @@ class DTestBase(object):
         # Issue a notification
         #XXX
         if isinstance(self, DTest) and state != RUNNING:
-            print >>sys.__stdout__, "%.*s %s" % (78 - len(state), self, state)
+            print >>sys.__stdout__, "%-*s %s" % (78 - len(state), self, state)
 
         # Transition to the new state
         self._state = state
@@ -262,17 +269,18 @@ class DTest(DTestBase):
         return 1
 
     def _depcheck(self):
-        # All dependencies must be COMPLETE
+        # All dependencies must be OK
         for dep in self._deps:
-            if dep._state == FAILED:
-                # Set our own state to DEPFAILED
-                self._transition(DEPFAILED)
+            if (dep._state == FAIL or dep._state == ERROR or
+                dep._state == DEPFAIL):
+                # Set our own state to DEPFAIL
+                self._transition(DEPFAIL)
                 return False
             elif dep._state == SKIPPED:
                 # Set our own state to SKIPPED
                 self._transition(SKIPPED)
                 return False
-            elif dep._state != COMPLETE:
+            elif dep._state != OK:
                 # Dependencies haven't finished up, yet
                 return False
 
@@ -281,8 +289,33 @@ class DTest(DTestBase):
 
 
 class DTestFixture(DTestBase):
+    def _set_partner(self, setUp):
+        # Sanity-check setUp
+        if setUp is None:
+            return
+
+        # First, set a dependency
+        depends(setUp)(self)
+
+        # Now, save our pair partner
+        self._partner = setUp
+
     def _depcheck(self):
-        # Dependencies must not be un-run or in the RUNNING state
+        # Make sure our partner succeeded
+        if self._partner is not None:
+            if (self._partner._state == FAIL or
+                self._partner._state == ERROR or
+                self._partner._state == DEPFAIL):
+                # Set our own state to DEPFAIL
+                self._transition(DEPFAIL)
+                return False
+            elif self._partner._state == SKIPPED:
+                # Set our own state to SKIPPED
+                self._transition(SKIPPED)
+                return False
+
+        # Other dependencies must not be un-run or in the RUNNING
+        # state
         for dep in self._deps:
             if dep._state is None or dep._state == RUNNING:
                 return False
@@ -297,7 +330,7 @@ class DTestFixture(DTestBase):
         # down fixtures need to run any time the corresponding set up
         # fixtures have run
         for dep in self._deps:
-            if dep._state != SKIPPED:
+            if dep != self._partner and dep._state != SKIPPED:
                 return
 
         # Call the superclass method
@@ -397,12 +430,17 @@ def _mod_fixtures(modname):
         _visit_mod(module)
 
         # Does the module have the fixture?
+        setUp = None
         if hasattr(module, 'setUp'):
             module.setUp = DTestFixture(module.setUp)
             setUps.append(module.setUp)
+            setUp = module.setUp
         if hasattr(module, 'tearDown'):
             module.tearDown = DTestFixture(module.tearDown)
             tearDowns.append(module.tearDown)
+
+            # Set the partner
+            module.tearDown._set_partner(setUp)
 
     # Next, set up dependencies; each setUp() is dependent on all the
     # ones before it...
@@ -439,6 +477,10 @@ def _visit_mod(mod):
             continue
 
         v = getattr(mod, k)
+
+        # Skip non-callables
+        if not callable(v):
+            continue
 
         # If it has the _dt_nottest attribute set to True, skip it
         if hasattr(v, '_dt_nottest') and v._dt_nottest:
@@ -483,6 +525,7 @@ class DTestCaseMeta(type):
         updates = {}
 
         # Check for class-level set up
+        setUpClass = None
         if 'setUpClass' in dict_:
             setUpClass = DTestFixture(dict_['setUpClass'])
             updates['setUpClass'] = setUpClass
@@ -492,6 +535,7 @@ class DTestCaseMeta(type):
             setUps.append(setUpClass)
 
         # Check for class-level tear down
+        tearDownClass = None
         if 'tearDownClass' in dict_:
             tearDownClass = DTestFixture(dict_['tearDownClass'])
             updates['tearDownClass'] = tearDownClass
@@ -499,6 +543,7 @@ class DTestCaseMeta(type):
             # Set up dependencies
             for td in tearDowns:
                 depends(tearDownClass)(td)
+            tearDownClass._set_partner(setUpClass)
             tearDowns.append(tearDownClass)
 
         # Now, we want to walk through dict_ and replace values that
@@ -548,6 +593,12 @@ class DTestCaseMeta(type):
         # Attach cls to all the tests
         for t in tests:
             t._class = cls
+
+        # Attach cls to in-class fixtures
+        if setUpClass is not None:
+            setUpClass._class = cls
+        if tearDownClass is not None:
+            tearDownClass._class = cls
 
         # Return the constructed class
         return cls

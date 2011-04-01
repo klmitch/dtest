@@ -1,16 +1,12 @@
+from dtest.constants import *
 from dtest import stream
-
-
-# Result origins
-PRE = 'PRE'    # Error in pre-execute fixture
-POST = 'POST'  # Error in post-execute fixture
-TEST = 'TEST'  # Error from the test itself
 
 
 class DTestResult(object):
     def __init__(self, test):
         self._test = test
         self._result = None
+        self._error = False
         self._nextctx = None
         self._ctx = None
         self._msgs = {}
@@ -29,6 +25,7 @@ class DTestResult(object):
         # If this was the test, determine a result
         if self._ctx == TEST:
             self._result = exc_type is None
+            self._error = exc_type is not None and exc_type != AssertionError
 
         # Generate a message, if necessary
         if outdata or errdata or exc_type or exc_value or tb:
@@ -65,6 +62,15 @@ class DTestResult(object):
         return ('<%s.%s object at %#x result %r with messages %r>' %
                 (self.__class__.__module__, self.__class__.__name__,
                  id(self), self._result, self._msgs.keys()))
+
+    def _state(self):
+        # Generate a state representation of the result
+        if self:
+            return OK
+        elif self._error:
+            return ERROR
+        else:
+            return FAIL
 
     def accumulate(self, nextctx):
         # Save the next context
