@@ -175,6 +175,12 @@ class DTestBase(object):
         return self._skip
 
     @property
+    def dependencies(self):
+        # We want the dependencies to be read-only, but to be accessed
+        # like an attribute
+        return frozenset(self._deps)
+
+    @property
     def dependents(self):
         # We want the depedenents to be read-only, but to be accessed
         # like an attribute
