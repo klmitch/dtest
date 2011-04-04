@@ -40,6 +40,7 @@ class DTestBase(object):
         dt._partner = None
         dt._attrs = {}
         dt._raises = set()
+        dt._timeout = None
         dt._result = None
 
         # Save it in the cache
@@ -403,6 +404,22 @@ def raises(*exc_types):
 
         # Store the recognized exception types
         dt._raises |= set(exc_types)
+
+        # Return the test
+        return dt
+
+    # Return the actual decorator
+    return wrapper
+
+
+def timed(timeout):
+    # Need a wrapper to perform the actual decoration
+    def wrapper(func):
+        # Get the DTest object for the test
+        dt = DTest(func)
+
+        # Store the timeout value (in seconds)
+        dt._timeout = timeout
 
         # Return the test
         return dt

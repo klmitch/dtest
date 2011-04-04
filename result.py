@@ -1,6 +1,8 @@
 from dtest import capture
 from dtest.constants import *
 
+from eventlet.timeout import Timeout
+
 
 class DTestResult(object):
     def __init__(self, test):
@@ -11,6 +13,7 @@ class DTestResult(object):
         self._nextctx = None
         self._ctx = None
         self._excs = None
+        self._timeout = None
         self._msgs = {}
 
     def __enter__(self):
@@ -20,7 +23,19 @@ class DTestResult(object):
         # Clear the captured values for this thread
         capture.retrieve()
 
+        # If test should be timed, set up the timeout
+        if self._ctx == TEST and self._test._timeout:
+            self._timeout = Timeout(self._test._timeout,
+                                    AssertionError("Timed out after %s "
+                                                   "seconds" %
+                                                   self._test._timeout))
+
     def __exit__(self, exc_type, exc_value, tb):
+        # Cancel the timeout if one is pending
+        if self._timeout is not None:
+            self._timeout.cancel()
+            self._timeout = None
+
         # Get the output and clean up
         captured = capture.retrieve()
 

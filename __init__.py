@@ -3,7 +3,7 @@ from dtest.constants import *
 from dtest.exceptions import DTestException
 from dtest.run import run_tests
 from dtest.test import istest, nottest, skip, failing, attr, depends, \
-    raises, DTestCase, dot
+    raises, timed, DTestCase, dot
 
 __all__ = ['Capturer',
            'PRE', 'POST', 'TEST',
@@ -12,4 +12,4 @@ __all__ = ['Capturer',
            'DTestException',
            'run_tests',
            'istest', 'nottest', 'skip', 'failing', 'attr', 'depends',
-           'raises', 'DTestCase', 'dot']
+           'raises', 'timed', 'DTestCase', 'dot']
