@@ -73,11 +73,11 @@ class DTestResult(object):
         # on the result
         if state is None:
             if self:
-                state = OK
+                state = UOK if self._test._exp_fail else OK
             elif self._error:
                 state = ERROR
             else:
-                state = FAIL
+                state = XFAIL if self._test._exp_fail else FAIL
 
         # Issue an appropriate notification
         if notify is not None:

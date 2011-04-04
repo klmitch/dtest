@@ -162,7 +162,10 @@ def _summary(counts):
     # Emit summary data
     print "%d tests run" % counts['total']
     if counts[OK] > 0:
-        print "  %d tests successful" % counts[OK]
+        unexp = ''
+        if counts[UOK] > 0:
+            unexp = ' (%d unexpected)' % counts[UOK]
+        print "  %d tests successful%s" % (counts[OK], unexp)
     if counts[SKIPPED] > 0:
         print "  %d tests skipped" % counts[SKIPPED]
     if counts[FAIL] + counts[ERROR] + counts[DEPFAIL] > 0:
@@ -170,7 +173,10 @@ def _summary(counts):
         bd = []
         total = 0
         if counts[FAIL] > 0:
-            bd.append('%d failed' % counts[FAIL])
+            exp = ''
+            if counts[XFAIL] > 0:
+                exp = ' [%d expected]' % counts[XFAIL]
+            bd.append('%d failed%s' % (counts[FAIL], exp))
             total += counts[FAIL]
         if counts[ERROR] > 0:
             bd.append('%d errors' % counts[ERROR])
@@ -223,8 +229,10 @@ def run_tests(maxth=None, skip=lambda dt: dt.skip,
     # Walk through the tests and output the results
     cnt = {
         OK: 0,
+        UOK: 0,
         SKIPPED: 0,
         FAIL: 0,
+        XFAIL: 0,
         ERROR: 0,
         DEPFAIL: 0,
         'total': 0,
@@ -233,6 +241,12 @@ def run_tests(maxth=None, skip=lambda dt: dt.skip,
         # Update the counts
         cnt[r.state] += int(r.test)
         cnt['total'] += int(r.test)
+
+        # Special case update for unexpected OKs and expected failures
+        if r.state == UOK:
+            cnt[OK] += int(r.test)
+        elif r.state == XFAIL:
+            cnt[FAIL] += int(r.test)
 
         if len(r) > 0:
             # Emit the header
