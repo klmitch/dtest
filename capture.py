@@ -14,7 +14,7 @@ class Capturer(object):
     _capturers = {}
     _caporder = []
 
-    def __new__(cls, name, desc, init, retrieve, install, uninstall):
+    def __new__(cls, name, desc):
         # First, make sure name isn't already in use
         if name in cls._capturers:
             return cls._capturers[name]
@@ -23,28 +23,10 @@ class Capturer(object):
         if _installed:
             raise DTestException("Capturers have already been installed")
 
-        # Verify that init and retrieve are callables
-        if not callable(init):
-            raise DTestException("%r must be a callable "
-                                 "initialization routine" % init)
-        elif not callable(retrieve):
-            raise DTestException("%r must be a callable "
-                                 "retrieval routine" % retrieve)
-        elif not callable(install):
-            raise DTestException("%r must be a callable "
-                                 "installation routine" % install)
-        elif not callable(uninstall):
-            raise DTestException("%r must be a callable "
-                                 "uninstallation routine" % uninstall)
-
         # OK, construct a new one
         cap = super(Capturer, cls).__new__(cls)
         cap.name = name
         cap.desc = desc
-        cap.init = init
-        cap.retrieve = retrieve
-        cap.install = install
-        cap.uninstall = uninstall
 
         # Save it in the cache
         cls._capturers[name] = cap
@@ -53,12 +35,44 @@ class Capturer(object):
         # And return it
         return cap
 
+    def init(self):
+        # Initialize a capturer; returns an object that looks like
+        # whatever's being captured, but from which a value can later
+        # be retrieved.
+        raise DTestException("%s.%s.init() unimplemented" %
+                             (self.__class__.__module__,
+                              self.__class__.__name__))
+
+    def retrieve(self, captured):
+        # Retrieve the value of a capturer; takes the object returned
+        # by init() and returns its string value.
+        raise DTestException("%s.%s.retrieve() unimplemented" %
+                             (self.__class__.__module__,
+                              self.__class__.__name__))
+
+    def install(self, new):
+        # Install the capture proxy specified by new; should place
+        # that object into the appropriate place so that it can
+        # capture output.  Should return the old value, which will
+        # later be passed to uninstall.
+        raise DTestException("%s.%s.install() unimplemented" %
+                             (self.__class__.__module__,
+                              self.__class__.__name__))
+
+    def uninstall(self, old):
+        # Uninstall the capture proxy by replacing it with the old
+        # value specified.  The old value will be the value returned
+        # by install().
+        raise DTestException("%s.%s.uninstall() unimplemented" %
+                             (self.__class__.__module__,
+                              self.__class__.__name__))
+
 
 class _CaptureLocal(local):
     def __init__(self):
         # Walk through all the capturers and initialize them
         for cap in Capturer._capturers.values():
-            setattr(self, cap.name, cap.init(cap))
+            setattr(self, cap.name, cap.init())
 
 
 _caplocal = _CaptureLocal()
@@ -73,8 +87,8 @@ def retrieve():
         cap = Capturer._capturers[name]
 
         # Get the current value of the capturer and re-initialize it
-        val = cap.retrieve(cap, getattr(_caplocal, name))
-        setattr(_caplocal, name, cap.init(cap))
+        val = cap.retrieve(getattr(_caplocal, name))
+        setattr(_caplocal, name, cap.init())
 
         # Push down the value and other important data
         if val:
@@ -114,7 +128,7 @@ def install():
 
     # Perform the install
     for cap in Capturer._capturers.values():
-        _saves[cap.name] = cap.install(cap, CaptureProxy(cap.name))
+        _saves[cap.name] = cap.install(CaptureProxy(cap.name))
 
 
 def uninstall():
@@ -127,38 +141,33 @@ def uninstall():
 
     # Restore our saved objects
     for cap in Capturer._capturers.values():
-        cap.uninstall(cap, _saves[cap.name])
+        cap.uninstall(_saves[cap.name])
 
     # Reset our state
     _saves = {}
     _installed = False
 
 
-def _st_init(cap):
-    # Create a new StringIO stream
-    return StringIO()
+class StdStreamCapturer(Capturer):
+    def init(self):
+        # Create a new StringIO stream
+        return StringIO()
 
+    def retrieve(self, st):
+        # Retrieve the value of the StringIO stream
+        return st.getvalue()
 
-def _st_retrieve(cap, st):
-    # Retrieve the value of the StringIO stream
-    return st.getvalue()
+    def install(self, new):
+        # Retrieve and return the old stream and install the new one
+        old = getattr(sys, self.name)
+        setattr(sys, self.name, new)
+        return old
 
-
-def _st_install(cap, new):
-    # Retrieve and return the old stream and install the new one
-    old = getattr(sys, cap.name)
-    setattr(sys, cap.name, new)
-    return old
-
-
-def _st_uninstall(cap, old):
-    # Re-install the old stream
-    setattr(sys, cap.name, old)
-    pass
+    def uninstall(self, old):
+        # Re-install the old stream
+        setattr(sys, self.name, old)
 
 
 # Add capturers for stdout and stderr
-Capturer('stdout', 'Standard Output', _st_init, _st_retrieve,
-         _st_install, _st_uninstall)
-Capturer('stderr', 'Standard Error', _st_init, _st_retrieve,
-         _st_install, _st_uninstall)
+StdStreamCapturer('stdout', 'Standard Output')
+StdStreamCapturer('stderr', 'Standard Error')
