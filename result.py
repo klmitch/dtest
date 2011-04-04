@@ -10,6 +10,7 @@ class DTestResult(object):
         self._error = False
         self._nextctx = None
         self._ctx = None
+        self._excs = None
         self._msgs = {}
 
     def __enter__(self):
@@ -25,8 +26,14 @@ class DTestResult(object):
 
         # If this was the test, determine a result
         if self._ctx == TEST:
-            self._result = exc_type is None
-            self._error = exc_type is not None and exc_type != AssertionError
+            if self._excs:
+                self._result = exc_type in self._excs
+                self._error = (exc_type not in self._excs and
+                               exc_type != AssertionError)
+            else:
+                self._result = exc_type is None
+                self._error = (exc_type is not None and
+                               exc_type != AssertionError)
 
         # Generate a message, if necessary
         if captured or exc_type or exc_value or tb:
@@ -36,6 +43,7 @@ class DTestResult(object):
         # Clean up the context
         self._ctx = None
         self._nextctx = None
+        self._excs = None
 
         # We handled the exception
         return True
@@ -86,9 +94,10 @@ class DTestResult(object):
         # Transition to the new state
         self._state = state
 
-    def accumulate(self, nextctx):
+    def accumulate(self, nextctx, excs=None):
         # Save the next context
         self._nextctx = nextctx
+        self._excs = excs
         return self
 
     @property

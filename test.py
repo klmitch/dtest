@@ -39,6 +39,7 @@ class DTestBase(object):
         dt._revdeps = set()
         dt._partner = None
         dt._attrs = {}
+        dt._raises = set()
         dt._result = None
 
         # Save it in the cache
@@ -95,7 +96,7 @@ class DTestBase(object):
                 do_call(self._pre, args, kwargs)
 
         # Execute the test
-        with self._result.accumulate(TEST):
+        with self._result.accumulate(TEST, self._raises):
             do_call(self._test, args, kwargs)
 
         # Invoke any clean-up that's necessary (regardless of
@@ -386,6 +387,22 @@ def depends(*deps):
         # Add the reverse dependencies
         for dep in deps:
             dep._revdeps.add(dt)
+
+        # Return the test
+        return dt
+
+    # Return the actual decorator
+    return wrapper
+
+
+def raises(*exc_types):
+    # Need a wrapper to perform the actual decoration
+    def wrapper(func):
+        # Get the DTest object for the test
+        dt = DTest(func)
+
+        # Store the recognized exception types
+        dt._raises |= set(exc_types)
 
         # Return the test
         return dt
