@@ -198,6 +198,10 @@ class DTestBase(object):
         self._post = post
         return post
 
+    def istest(self):
+        # Return True if this is a test
+        return False
+
     @classmethod
     def tests(cls):
         # Return the list of all tests
@@ -258,6 +262,10 @@ class DTest(DTestBase):
                 return False
 
         # All dependencies satisfied!
+        return True
+
+    def istest(self):
+        # Return True, since this is a test
         return True
 
 
