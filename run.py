@@ -30,6 +30,9 @@ class Queue(object):
         # attribute.
         waiting = []
         for dt in self.tests:
+            # Prepare the test--allocates a result
+            dt._prepare()
+
             # Do we skip this one?
             if skip(dt):
                 dt._skipped(notify)
@@ -90,8 +93,8 @@ class Queue(object):
         if self.th_count > 0:
             self.th_event.wait()
 
-        # For convenience, return the full list of tests
-        return self.tests
+        # For convenience, return the full list of results
+        return [t.result for t in self.tests]
 
     def run_test(self, test, notify):
         # Acquire the semaphore
@@ -182,6 +185,10 @@ def _summary(counts):
 def _notify(test, state):
     lw = DEF_LINEWIDTH
 
+    # Are we interested in this test?
+    if not test.istest() or state == RUNNING:
+        return
+
     # Determine the name of the test
     name = str(test)
 
@@ -208,7 +215,7 @@ def run_tests(maxth=None, skip=lambda dt: dt.skip,
     capture.install()
 
     # Run the tests
-    tests = q.run(notify)
+    results = q.run(notify)
 
     # Uninstall the capture proxies
     capture.uninstall()
@@ -222,13 +229,10 @@ def run_tests(maxth=None, skip=lambda dt: dt.skip,
         DEPFAIL: 0,
         'total': 0,
         }
-    for t in tests:
+    for r in results:
         # Update the counts
-        cnt[t.state] += int(t)
-        cnt['total'] += int(t)
-
-        # Get the test result
-        r = t.result
+        cnt[r.state] += int(r.test)
+        cnt['total'] += int(r.test)
 
         if len(r) > 0:
             # Emit the header

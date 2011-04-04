@@ -32,14 +32,13 @@ class DTestBase(object):
         dt._test = test
         dt._class = None
         dt._skip = False
-        dt._state = None
         dt._pre = None
         dt._post = None
         dt._deps = set()
         dt._revdeps = set()
         dt._partner = None
         dt._attrs = {}
-        dt._result = result.DTestResult(dt)
+        dt._result = None
 
         # Save it in the cache
         DTestBase._tests[test] = dt
@@ -87,7 +86,7 @@ class DTestBase(object):
             del kwargs['_notify']
 
         # Transition to the running state
-        self._transition(RUNNING)
+        self._result._transition(RUNNING, notify=notify)
 
         # Perform preliminary call
         if self._pre is not None:
@@ -105,7 +104,7 @@ class DTestBase(object):
                 do_call(self._post, args, kwargs)
 
         # Transition to the appropriate ending state
-        self._transition(self._result._state(), notify)
+        self._result._transition(notify=notify)
 
         # Return the result
         return self._result
@@ -153,8 +152,9 @@ class DTestBase(object):
     @property
     def state(self):
         # We want the state to be read-only, but to be accessed like
-        # an attribute
-        return self._state
+        # an attribute; this is a short-cut for reading the state from
+        # the result
+        return self._result.state if self._result is not None else None
 
     @property
     def test(self):
@@ -214,8 +214,8 @@ class DTestBase(object):
     def _skipped(self, notify):
         # Mark that this test has been skipped by transitioning the
         # state
-        if self._state is None:
-            self._transition(SKIPPED, notify)
+        if self.state is None:
+            self._result._transition(SKIPPED, notify=notify)
 
             # Propagate up to tests dependent on us
             for dt in self._revdeps:
@@ -230,13 +230,9 @@ class DTestBase(object):
         # has been skipped
         pass
 
-    def _transition(self, state, notify=None):
-        # Issue a notification
-        if notify is not None and isinstance(self, DTest) and state != RUNNING:
-            notify(self, state)
-
-        # Transition to the new state
-        self._state = state
+    def _prepare(self):
+        # Prepares the test for running by setting up a result
+        self._result = result.DTestResult(self)
 
 
 class DTest(DTestBase):
@@ -248,16 +244,16 @@ class DTest(DTestBase):
     def _depcheck(self, notify):
         # All dependencies must be OK
         for dep in self._deps:
-            if (dep._state == FAIL or dep._state == ERROR or
-                dep._state == DEPFAIL):
+            if (dep.state == FAIL or dep.state == ERROR or
+                dep.state == DEPFAIL):
                 # Set our own state to DEPFAIL
-                self._transition(DEPFAIL, notify)
+                self._result._transition(DEPFAIL, notify=notify)
                 return False
-            elif dep._state == SKIPPED:
+            elif dep.state == SKIPPED:
                 # Set our own state to SKIPPED
-                self._transition(SKIPPED, notify)
+                self._result._transition(SKIPPED, notify=notify)
                 return False
-            elif dep._state != OK:
+            elif dep.state != OK:
                 # Dependencies haven't finished up, yet
                 return False
 
@@ -284,21 +280,21 @@ class DTestFixture(DTestBase):
     def _depcheck(self, notify):
         # Make sure our partner succeeded
         if self._partner is not None:
-            if (self._partner._state == FAIL or
-                self._partner._state == ERROR or
-                self._partner._state == DEPFAIL):
+            if (self._partner.state == FAIL or
+                self._partner.state == ERROR or
+                self._partner.state == DEPFAIL):
                 # Set our own state to DEPFAIL
-                self._transition(DEPFAIL, notify)
+                self._result._transition(DEPFAIL, notify=notify)
                 return False
-            elif self._partner._state == SKIPPED:
+            elif self._partner.state == SKIPPED:
                 # Set our own state to SKIPPED
-                self._transition(SKIPPED, notify)
+                self._result._transition(SKIPPED, notify=notify)
                 return False
 
         # Other dependencies must not be un-run or in the RUNNING
         # state
         for dep in self._deps:
-            if dep._state is None or dep._state == RUNNING:
+            if dep.state is None or dep.state == RUNNING:
                 return False
 
         # Dependencies can have failed, failed due to dependencies,
@@ -311,7 +307,7 @@ class DTestFixture(DTestBase):
         # down fixtures need to run any time the corresponding set up
         # fixtures have run
         for dep in self._deps:
-            if dep != self._partner and dep._state != SKIPPED:
+            if dep != self._partner and dep.state != SKIPPED:
                 return
 
         # Call the superclass method
@@ -321,7 +317,7 @@ class DTestFixture(DTestBase):
         # If all tests dependent on us have been skipped, we don't
         # need to run
         for dep in self._revdeps:
-            if dep._state != SKIPPED:
+            if dep.state != SKIPPED:
                 return
 
         # Call the superclass's _skipped() method
@@ -601,7 +597,7 @@ def dot(grname='testdeps'):
         opts = dict(label=r'%s\n%r' % (dt, test))
         if isinstance(dt, DTestFixture):
             opts['color'] = 'red'
-        if dt._state == SKIPPED:
+        if dt.state == SKIPPED:
             opts['style'] = 'dotted'
         nodes.append('"%s"%s;' % (dt, mkopts(opts)))
 

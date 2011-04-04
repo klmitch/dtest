@@ -5,6 +5,7 @@ from dtest.constants import *
 class DTestResult(object):
     def __init__(self, test):
         self._test = test
+        self._state = None
         self._result = None
         self._error = False
         self._nextctx = None
@@ -56,20 +57,34 @@ class DTestResult(object):
         # Does the key exist in the list of messages?
         return key in self._msgs
 
+    def __str__(self):
+        # Return our state, which is an excellent summary of the
+        # result
+        return self._state
+
     def __repr__(self):
         # Generate a representation of the result
-        return ('<%s.%s object at %#x result %r with messages %r>' %
+        return ('<%s.%s object at %#x state %s with messages %r>' %
                 (self.__class__.__module__, self.__class__.__name__,
-                 id(self), self._result, self._msgs.keys()))
+                 id(self), self._state, self._msgs.keys()))
 
-    def _state(self):
-        # Generate a state representation of the result
-        if self:
-            return OK
-        elif self._error:
-            return ERROR
-        else:
-            return FAIL
+    def _transition(self, state=None, notify=None):
+        # If state is None, determine the state to transition to based
+        # on the result
+        if state is None:
+            if self:
+                state = OK
+            elif self._error:
+                state = ERROR
+            else:
+                state = FAIL
+
+        # Issue an appropriate notification
+        if notify is not None:
+            notify(self._test, state)
+
+        # Transition to the new state
+        self._state = state
 
     def accumulate(self, nextctx):
         # Save the next context
@@ -81,6 +96,12 @@ class DTestResult(object):
         # We want the test to be read-only, but to be accessed like an
         # attribute
         return self._test
+
+    @property
+    def state(self):
+        # We want the state to be read-only, but to be accessed like
+        # an attribute
+        return self._state
 
     @property
     def msgs(self):
