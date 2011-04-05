@@ -48,6 +48,7 @@ class Queue(object):
         # last thread exits
         self.th_count = 0
         self.th_event = Event()
+        self.th_max = 0
 
     def spawn(self, tests, notify):
         # Work with a copy of the tests
@@ -70,6 +71,8 @@ class Queue(object):
 
                     # Spawn the test
                     self.th_count += 1
+                    if self.th_count > self.th_max:
+                        self.th_max = self.th_count
                     spawn_n(self.run_test, test, notify)
 
                 # Dependencies failed; check if state changed and add
@@ -160,7 +163,8 @@ def _msg(test, m=None, hdr=''):
 
 def _summary(counts):
     # Emit summary data
-    print "%d tests run" % counts['total']
+    print ("%d tests run in %d max simultaneous threads" %
+           (counts['total'], counts['threads']))
     if counts[OK] > 0:
         unexp = ''
         if counts[UOK] > 0:
@@ -236,6 +240,7 @@ def run_tests(maxth=None, skip=lambda dt: dt.skip,
         ERROR: 0,
         DEPFAIL: 0,
         'total': 0,
+        'threads': q.th_max,
         }
     for r in results:
         # Update the counts
