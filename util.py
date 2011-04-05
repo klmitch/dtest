@@ -3,6 +3,18 @@ import re
 from dtest.exceptions import DTestException
 
 
+__all__ = ['assert_false', 'assert_true', 'assert_raises', 'assert_equal',
+           'assert_not_equal', 'assert_almost_equal',
+           'assert_not_almost_equal', 'assert_sequence_equal',
+           'assert_list_equal', 'assert_tuple_equal', 'assert_set_equal',
+           'assert_in', 'assert_not_in', 'assert_is', 'assert_is_not',
+           'assert_dict_equal', 'assert_dict_contains', 'assert_items_equal',
+           'assert_less', 'assert_less_equal', 'assert_greater',
+           'assert_greater_equal', 'assert_is_none', 'assert_is_not_none',
+           'assert_is_instance', 'assert_is_not_instance',
+           'assert_regexp_matches', 'assert_not_regexp_matches']
+
+
 def safe_repr(obj, maxlen=None):
     # Safely get the representation of an object
     try:
