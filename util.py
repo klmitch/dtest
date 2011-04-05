@@ -1,14 +1,22 @@
+import re
+
 from dtest.exceptions import DTestException
 
 
-def safe_repr(obj):
+def safe_repr(obj, maxlen=None):
     # Safely get the representation of an object
     try:
-        return repr(obj)
+        result = repr(obj)
     except:
         # The repr() could call user code, so if it fails, we want to
         # be intelligent about what we return
-        return object.__repr__(obj)
+        result = object.__repr__(obj)
+
+    # Truncate representation if necessary
+    if maxlen is not None and len(result) > maxlen:
+        result = result[:maxlen-3] + '...'
+
+    return result
 
 
 def select_msg(usermsg, defmsg):
@@ -16,6 +24,15 @@ def select_msg(usermsg, defmsg):
     if usermsg is None:
         return defmsg
     return usermsg
+
+
+def make_re(regexp):
+    # If it's None or not an instance of string, return it
+    if regexp is None or not isinstance(regexp, basestring):
+        return regexp
+
+    # Convert to a regular expression
+    return re.compile(regexp)
 
 
 def assert_false(expr, msg=None):
@@ -33,9 +50,10 @@ def assert_true(expr, msg=None):
 
 
 class AssertRaisesContext(object):
-    def __init__(self, excs, msg):
+    def __init__(self, excs, msg, regexp=None):
         self.excs = excs
         self.msg = msg
+        self.regexp = make_re(regexp)
 
     def __enter__(self):
         return self
@@ -56,7 +74,15 @@ class AssertRaisesContext(object):
         # OK, an exception was raised; make sure it's one we were
         # expecting
         elif exc_type in self.excs or issubclass(exc_type, self.excs):
-            # Exception we were looking for, so say we handled it
+            # Do we need to check against a regexp?
+            if (self.regexp is not None and
+                not self.regexp.search(str(exc_value))):
+                msg = select_msg(self.msg, 'Exception "%s" does not match '
+                                 'expression "%s"' % (exc_value,
+                                                      self.regexp.pattern))
+                raise AssertionError(msg)
+
+            # Assertion we were looking for, so say we handled it
             return True
 
         # Not an exception we were expecting, so let it bubble up
@@ -73,7 +99,7 @@ class AssertRaisesContext(object):
 
 
 def assert_raises(excepts, callableObj=None, noRaiseMsg=None,
-                  *args, **kwargs):
+                  matchRegExp=None, *args, **kwargs):
     # First, check if excepts is a sequence
     try:
         length = len(excepts)
@@ -81,7 +107,7 @@ def assert_raises(excepts, callableObj=None, noRaiseMsg=None,
         excepts = [excepts]
 
     # Now, grab a context
-    ctx = AssertRaisesContext(excepts, noRaiseMsg)
+    ctx = AssertRaisesContext(excepts, noRaiseMsg, matchRegExp)
 
     if callableObj is None:
         # No callable, so just return the context
@@ -339,4 +365,163 @@ def assert_is_not(expr1, expr2, msg=None):
     if expr1 is expr2:
         msg = select_msg(msg, "%s is unexpectedly %s" %
                          (safe_repr(expr1), safe_repr(expr2)))
+        raise AssertionError(msg)
+
+
+def assert_dict_equal(d1, d2, msg=None):
+    # Make sure both are dict instances
+    if not isinstance(d1, dict):
+        raise AssertionError("First argument is not a dictionary")
+    if not isinstance(d2, dict):
+        raise AssertionError("Second argument is not a dictionary")
+
+    # Ensure they're equal
+    if d1 != d2:
+        stdmsg = "%s != %s" % (safe_repr(d1, 30), safe_repr(d2, 30))
+        raise AssertionError(select_msg(msg, stdmsg))
+
+
+def assert_dict_contains(actual, expected, msg=None):
+    # Determine missing or mismatched keys
+    missing = []
+    mismatched = []
+    for k, v in expected.items():
+        if k not in actual:
+            missing.append(k)
+        elif v != actual[k]:
+            mismatched.append("Key %s: expected %s, actual %s" %
+                              (safe_repr(k), safe_repr(v),
+                               safe_repr(actual[k])))
+
+    # Are there any problems?
+    if not (missing or mismatched):
+        return
+
+    # Build up the standard message
+    stdmsg = ''
+    if missing:
+        stdmsg += "Missing keys: %s" % ', '.join([safe_repr(k)
+                                                  for k in missing])
+    if mismatched:
+        if stdmsg:
+            stdmsg += '; '
+        stdmsg += "Mismatched values: %s" % '; '.join(mismatched)
+
+    raise AssertionError(select_msg(msg, stdmsg))
+
+
+def assert_items_equal(actual, expected, msg=None):
+    # Order n^2 algorithm for comparing items in the lists
+    missing = []
+    while expected:
+        item = expected.pop()
+        try:
+            # Take it out of what we actually got
+            actual.remove(item)
+        except ValueError:
+            # It wasn't there!
+            missing.append(item)
+
+    # Now, missing contains those items in expected which were not in
+    # actual, and actual contains those items which were not in
+    # expected; if missing and actual are empty, we're fine
+    if not missing and not actual:
+        return
+
+    # Build the error message
+    stdmsg = ''
+    if missing:
+        stdmsg += ("Missing items: %s" %
+                   ', '.join([safe_repr(i) for i in missing]))
+    if actual:
+        if stdmsg:
+            stdmsg += '; '
+        stdmsg += ("Unexpected items: %s" %
+                   ', '.join([safe_repr(i) for i in actual]))
+    raise AssertionError(select_msg(msg, stdmsg))
+
+
+def assert_less(a, b, msg=None):
+    # Ensure a < b
+    if not a < b:
+        msg = select_msg(msg, "%s not less than %s" %
+                         (safe_repr(a), safe_repr(b)))
+        raise AssertionError(msg)
+
+
+def assert_less_equal(a, b, msg=None):
+    # Ensure a <= b
+    if not a <= b:
+        msg = select_msg(msg, "%s not less than or equal to %s" %
+                         (safe_repr(a), safe_repr(b)))
+        raise AssertionError(msg)
+
+
+def assert_greater(a, b, msg=None):
+    # Ensure a > b
+    if not a > b:
+        msg = select_msg(msg, "%s not greater than %s" %
+                         (safe_repr(a), safe_repr(b)))
+        raise AssertionError(msg)
+
+
+def assert_greater_equal(a, b, msg=None):
+    # Ensure a >= b
+    if not a >= b:
+        msg = select_msg(msg, "%s not greater than or equal to %s" %
+                         (safe_repr(a), safe_repr(b)))
+        raise AssertionError(msg)
+
+
+def assert_is_none(obj, msg=None):
+    # Ensure obj is None
+    if obj is not None:
+        msg = select_msg(msg, "%s is not None" % sef_repr(obj))
+        raise AssertionError(msg)
+
+
+def assert_is_not_none(obj, msg=None):
+    # Ensure obj is not None
+    if obj is None:
+        msg = select_msg(msg, "%s is None" % sef_repr(obj))
+        raise AssertionError(msg)
+
+
+def assert_is_instance(obj, cls, msg=None):
+    # Ensure obj is an instance of cls
+    if not isinstance(obj, cls):
+        msg = select_msg(msg, "%s is not an instance of %r" %
+                         (safe_repr(obj), cls))
+        raise AssertionError(msg)
+
+
+def assert_is_not_instance(obj, cls, msg=None):
+    # Ensure obj is not an instance of cls
+    if isinstance(obj, cls):
+        msg = select_msg(msg, "%s is an instance of %r" %
+                         (safe_repr(obj), cls))
+        raise AssertionError(msg)
+
+
+def assert_regexp_matches(text, regexp, msg=None):
+    # Get the regular expression
+    regexp = make_re(regexp)
+
+    # Does it match?
+    if not regexp.search(text):
+        msg = select_msg(msg, "'%s' does not match text %s" %
+                         (regexp.pattern, safe_repr(text)))
+        raise AssertionError(msg)
+
+
+def assert_not_regexp_matches(text, regexp, msg=None):
+    # Get the regular expression
+    regexp = make_re(regexp)
+
+    # Does it match?
+    match = regexp.search(text)
+    if match:
+        msg = select_msg(msg, "'%s' matches text %r from %s" %
+                         (regexp.pattern, text[match.start():match.end()],
+                          safe_repr(text)))
         raise AssertionError(msg)
