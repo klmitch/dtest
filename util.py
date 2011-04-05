@@ -240,7 +240,7 @@ def assert_sequence_equal(seq1, seq2, msg=None, seq_type=None):
                                  (st_name, safe_repr(seq1)))
         if not isinstance(seq2, seq_type):
             raise AssertionError("Second sequence is not a %s: %s" %
-                                 (st_name, safe_rep(seq2)))
+                                 (st_name, safe_repr(seq2)))
     else:
         st_name = "sequence"
 
