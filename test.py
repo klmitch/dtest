@@ -51,7 +51,7 @@ class DTestBase(object):
 
     def __getattr__(self, key):
         # Get the attribute out of the _attrs map
-        return dt._attrs[key]
+        return self._attrs[key]
 
     def __setattr__(self, key, value):
         # Is it an internal attribute?
