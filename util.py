@@ -26,7 +26,7 @@ def safe_repr(obj, maxlen=None):
 
     # Truncate representation if necessary
     if maxlen is not None and len(result) > maxlen:
-        result = result[:maxlen-3] + '...'
+        result = result[:maxlen - 3] + '...'
 
     return result
 
