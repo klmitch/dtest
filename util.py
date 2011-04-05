@@ -110,8 +110,28 @@ class AssertRaisesContext(object):
             return str(exc)
 
 
-def assert_raises(excepts, callableObj=None, noRaiseMsg=None,
-                  matchRegExp=None, *args, **kwargs):
+def assert_raises(excepts, *args, **kwargs):
+    # Extract callableObj from arguments
+    callableObj = None
+    if 'callableObj' in kwargs:
+        callableObj = kwargs['callableObj']
+        del kwargs['callableObj']
+    elif args:
+        callableObj = args[0]
+        args = args[1:]
+
+    # Extract noRaiseMsg from keyword arguments
+    noRaiseMsg = None
+    if 'noRaiseMsg' in kwargs:
+        noRaiseMsg = kwargs['noRaiseMsg']
+        del kwargs['noRaiseMsg']
+
+    # Extract matchRegExp from keyword arguments
+    matchRegExp = None
+    if 'matchRegExp' in kwargs:
+        matchRegExp = kwargs['matchRegExp']
+        del kwargs['matchRegExp']
+
     # First, check if excepts is a sequence
     try:
         length = len(excepts)
