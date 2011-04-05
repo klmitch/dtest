@@ -462,11 +462,11 @@ def _mod_fixtures(modname):
     # Next, set up dependencies; each setUp() is dependent on all the
     # ones before it...
     for i in range(1, len(setUps)):
-        depends(*setUps[:i])(setUps[i])
+        depends(setUps[i - 1])(setUps[i])
 
     # While each tearDown() is dependent on all the ones after it...
     for i in range(len(tearDowns) - 1):
-        depends(*tearDowns[i + 1:])(tearDowns[i])
+        depends(tearDowns[i + 1])(tearDowns[i])
 
     # Return the setUps and tearDowns
     return (setUps, tearDowns)
@@ -520,9 +520,10 @@ def _visit_mod(mod):
             updates[k] = v
 
         # Attach fixtures as appropriate...
-        depends(*setUps)(v)
-        for td in tearDowns:
-            depends(v)(td)
+        if setUps:
+            depends(setUps[-1])(v)
+        if tearDowns:
+            depends(v)(tearDowns[-1])
 
     # Update the module
     for k, v in updates.items():
@@ -548,7 +549,8 @@ class DTestCaseMeta(type):
             updates[SETUP + CLASS] = setUpClass
 
             # Set up dependencies
-            depends(*setUps)(setUpClass)
+            if setUps:
+                depends(setUps[-1])(setUpClass)
             setUps.append(setUpClass)
 
         # Check for class-level tear down
@@ -558,8 +560,8 @@ class DTestCaseMeta(type):
             updates[TEARDOWN + CLASS] = tearDownClass
 
             # Set up dependencies
-            for td in tearDowns:
-                depends(tearDownClass)(td)
+            if tearDowns:
+                depends(tearDownClass)(tearDowns[-1])
             tearDownClass._set_partner(setUpClass)
             tearDowns.append(tearDownClass)
 
@@ -597,9 +599,10 @@ class DTestCaseMeta(type):
                 v.tearDown(tearDown)
 
             # Do package-, module-, and class-level fixtures as well
-            depends(*setUps)(v)
-            for td in tearDowns:
-                depends(v)(td)
+            if setUps:
+                depends(setUps[-1])(v)
+            if tearDowns:
+                depends(v)(tearDowns[-1])
 
         # Update the dict_
         dict_.update(updates)
