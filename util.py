@@ -508,14 +508,14 @@ def assert_greater_equal(a, b, msg=None):
 def assert_is_none(obj, msg=None):
     # Ensure obj is None
     if obj is not None:
-        msg = select_msg(msg, "%s is not None" % sef_repr(obj))
+        msg = select_msg(msg, "%s is not None" % safe_repr(obj))
         raise AssertionError(msg)
 
 
 def assert_is_not_none(obj, msg=None):
     # Ensure obj is not None
     if obj is None:
-        msg = select_msg(msg, "%s is None" % sef_repr(obj))
+        msg = select_msg(msg, "%s is None" % safe_repr(obj))
         raise AssertionError(msg)
 
 
