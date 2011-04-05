@@ -6,6 +6,11 @@ from dtest import exceptions
 from dtest import result
 
 
+SETUP = 'setUp'
+TEARDOWN = 'tearDown'
+CLASS = 'Class'
+
+
 class DTestBase(object):
     _tests = {}
 
@@ -443,11 +448,11 @@ def _mod_fixtures(modname):
 
         # Does the module have the fixture?
         setUp = None
-        if hasattr(module, 'setUp'):
+        if hasattr(module, SETUP):
             module.setUp = DTestFixture(module.setUp)
             setUps.append(module.setUp)
             setUp = module.setUp
-        if hasattr(module, 'tearDown'):
+        if hasattr(module, TEARDOWN):
             module.tearDown = DTestFixture(module.tearDown)
             tearDowns.append(module.tearDown)
 
@@ -499,7 +504,7 @@ def _visit_mod(mod):
             continue
 
         # If it's one of the test fixtures, skip it
-        if k in ('setUp', 'tearDown'):
+        if k in (SETUP, TEARDOWN):
             continue
 
         # Does it match the test RE?
@@ -527,8 +532,8 @@ def _visit_mod(mod):
 class DTestCaseMeta(type):
     def __new__(mcs, name, bases, dict_):
         # Look up any test fixtures for the individual tests...
-        setUp = dict_.get('setUp', None)
-        tearDown = dict_.get('tearDown', None)
+        setUp = dict_.get(SETUP, None)
+        tearDown = dict_.get(TEARDOWN, None)
 
         # Check for package- and module-level fixtures
         setUps, tearDowns = _mod_fixtures(dict_['__module__'])
@@ -538,9 +543,9 @@ class DTestCaseMeta(type):
 
         # Check for class-level set up
         setUpClass = None
-        if 'setUpClass' in dict_:
-            setUpClass = DTestFixture(dict_['setUpClass'])
-            updates['setUpClass'] = setUpClass
+        if (SETUP + CLASS) in dict_:
+            setUpClass = DTestFixture(dict_[SETUP + CLASS])
+            updates[SETUP + CLASS] = setUpClass
 
             # Set up dependencies
             depends(*setUps)(setUpClass)
@@ -548,9 +553,9 @@ class DTestCaseMeta(type):
 
         # Check for class-level tear down
         tearDownClass = None
-        if 'tearDownClass' in dict_:
-            tearDownClass = DTestFixture(dict_['tearDownClass'])
-            updates['tearDownClass'] = tearDownClass
+        if (TEARDOWN + CLASS) in dict_:
+            tearDownClass = DTestFixture(dict_[TEARDOWN + CLASS])
+            updates[TEARDOWN + CLASS] = tearDownClass
 
             # Set up dependencies
             for td in tearDowns:
@@ -567,7 +572,7 @@ class DTestCaseMeta(type):
                 continue
 
             # If it's one of the test fixtures, skip it
-            if k in ('setUp', 'tearDown', 'setUpClass', 'tearDownClass'):
+            if k in (SETUP, TEARDOWN, SETUP + CLASS, TEARDOWN + CLASS):
                 continue
 
             # Does it match the test RE?
