@@ -1,3 +1,15 @@
+"""
+============
+Test Running
+============
+
+This module contains the run_test() function and the associated Queue
+class, which together provide the functionality for executing tests in
+a threaded manner while properly handling ordering implied by
+dependencies.  Output is specified by passing references to functions
+in to run_test().
+"""
+
 import sys
 import traceback
 
@@ -14,7 +26,57 @@ DEF_LINEWIDTH = 78
 
 
 class Queue(object):
+    """
+    Queue
+    =====
+
+    The Queue class maintains a queue of tests waiting to be run.  The
+    constructor selects the tests, based on the result of the skip()
+    function passed in, while the spawn() method selects and spawns
+    the actual tests to be run.  The run() method is the entry point,
+    causing the initial set of tests to be run, and run_test() is run
+    in a separate thread for each test.  Note that the algorithm
+    implemented here for selecting waiting tests may not properly
+    detect cycles, and the test runner could hang as a result.
+
+    Implementation Details
+    ----------------------
+
+    The ``sem`` attribute is either None or a Semaphore instance used
+    to cap the number of threads that can be running at any given
+    time.  The ``tests`` attribute is a utility attribute containing
+    the list of defined tests, while the ``waiting`` attribute is a
+    set containing all tests which are still waiting to be run
+    (skipped tests will never appear in this set).  Thread safety
+    requires that accesses to the ``waiting`` attribute be locked, so
+    a Semaphore instance is stored in the ``waitlock`` parameter for
+    this purpose.  Finally, the ``th_count`` and ``th_max`` attributes
+    maintain a count of currently executing threads and the maximum
+    thread count observed, respectively, while ``th_event`` contains
+    an Event instance which is signaled once it is determined that all
+    tests have been run.
+    """
+
     def __init__(self, maxth, skip, notify):
+        """
+        Initialize a Queue.  The ``maxth`` argument must be either
+        None or an integer specifying the maximum number of
+        simultaneous threads permitted.  The ``skip`` and ``notify``
+        arguments are function references; ``skip`` should take a test
+        and return True if the test should be skipped, and ``notify``
+        takes a test and the state to which it is transitioning, and
+        may use that information to emit a test result.  Note that the
+        ``notify`` function will receive state transitions to the
+        RUNNING state, as well as state transitions for test fixtures;
+        callers may find the DTestBase.istest() method useful for
+        differentiating between regular tests and test fixtures for
+        reporting purposes.
+
+        Note that the ``maxth`` restriction is implemented by having
+        the spawned thread wait on the Semaphore, and thus ``th_max``
+        may be greater than ``maxth``.
+        """
+
         # maxth allows us to limit the number of simultaneously
         # executing threads
         if maxth is None:
@@ -51,6 +113,15 @@ class Queue(object):
         self.th_max = 0
 
     def spawn(self, tests, notify):
+        """
+        Selects all ready tests from the set or list specified in
+        ``tests`` and spawns threads to execute them.  The ``notify``
+        argument specifies a notification function, as for __init__().
+        Note that the maximum thread count restriction is implemented
+        by having the thread wait on the ``sem`` Semaphore after being
+        spawned.
+        """
+
         # Work with a copy of the tests
         tests = list(tests)
 
@@ -88,6 +159,14 @@ class Queue(object):
                     tests.extend(list(test.dependents))
 
     def run(self, notify):
+        """
+        Runs all tests that have been queued up in the Queue object.
+        The ``notify`` argument specifies a notification function, as
+        for __init__().  Does not return until all tests have been
+        run.  Note that if dependency cycles are present, this
+        function may hang.
+        """
+
         # Walk through all the waiting tests; note the copy, to avoid
         # modifications to self.waiting from upsetting us
         self.spawn(self.waiting, notify)
@@ -100,6 +179,16 @@ class Queue(object):
         return [t.result for t in self.tests]
 
     def run_test(self, test, notify):
+        """
+        Execute ``test``.  The ``notify`` argument specifies a
+        notification function, as for __init__().  This method is
+        meant to be run in a new thread.
+
+        Once a test is complete, the thread's dependents will be
+        passed back to the spawn() method, in order to pick up and
+        execute any tests that are now ready for execution.
+        """
+
         # Acquire the semaphore
         if self.sem is not None:
             self.sem.acquire()
@@ -130,6 +219,19 @@ class Queue(object):
 
 
 def _msg(test, m=None, hdr=''):
+    """
+    Default msg() function for run_tests().  The ``test`` argument
+    specifies the test being run.  The ``m`` argument will be None or
+    an instance of DTestMessage; in the latter case, the ``hdr``
+    argument will specify a header to identify the origin of the
+    message.
+
+    In the case that ``m`` is None, a header identifying the test is
+    emitted; otherwise, the message is emitted, prefixed by the header
+    if one is specified.  Exception information is emitted before any
+    output.
+    """
+
     # Determine line width
     lw = DEF_LINEWIDTH
 
@@ -162,6 +264,16 @@ def _msg(test, m=None, hdr=''):
 
 
 def _summary(counts):
+    """
+    Default summary() function for run_tests().  The ``counts``
+    argument specifies the counts for each type of test result.
+
+    Outputs a summary indicating the total number of tests executed
+    and the number of threads that were used to execute the tests,
+    then outputs a variable number of lines to summarize the count of
+    each type of result.
+    """
+
     # Emit summary data
     print ("%d tests run in %d max simultaneous threads" %
            (counts['total'], counts['threads']))
@@ -193,6 +305,18 @@ def _summary(counts):
 
 
 def _notify(test, state):
+    """
+    Default notify() function for run_tests().  The ``test`` argument
+    specifies the test or test fixture, and the ``state`` argument
+    indicates the state the test is transitioning to.
+
+    This implementation ignores test fixtures or transitions to the
+    RUNNING state, and emits messages to sys.__stdout__ (since
+    sys.stdout is being captured) containing the name of the test and
+    the state being transitioned to.  This provides visual display of
+    the result of a test.
+    """
+
     lw = DEF_LINEWIDTH
 
     # Are we interested in this test?
@@ -215,6 +339,68 @@ def _notify(test, state):
 
 def run_tests(maxth=None, skip=lambda dt: dt.skip,
               notify=_notify, msg=_msg, summary=_summary):
+    """
+    Run all defined tests.  The ``maxth`` argument, if an integer,
+    indicates the maximum number of simultaneously executing threads
+    that may be used.  The ``skip`` argument specifies a function
+    which, when passed a test, returns True to indicate that that test
+    should be skipped; by default, it returns the value of the
+    ``skip`` attribute on the test, which may be set using the @skip
+    decorator.  The ``notify`` argument specifies a function which
+    takes as arguments the test and a state the test is transitioning
+    to; it may emit status information to sys.__stdout__ (note that
+    sys.stdout is captured while tests are running).  The ``msg``
+    argument specifies a function which takes as arguments the test, a
+    DTestMessage object, and a string header (note that the latter two
+    arguments *must* be optional); the msg() function will be called
+    first with just the test, after which it will be called once for
+    each saved message.  If no messages are saved for a given test,
+    the msg() function will not be called on that test.  Finally, the
+    ``summary`` argument specifies a function which takes as its sole
+    argument a dictionary with summary counts of each type of result.
+    The keys are as follows:
+
+    OK
+        The number of tests which passed.  This includes the count of
+        unexpected passes (tests marked with the @failing decorator
+        which passed).
+
+    UOK
+        The number of tests which unexpectedly passed.
+
+    SKIPPED
+        The number of tests which were skipped in this test run.
+
+    FAIL
+        The number of tests which failed.  This includes the count of
+        expected failures (tests marked with the @failing decorator
+        which failed).
+
+    XFAIL
+        The number of tests which failed, where failure was expected.
+
+    ERROR
+        The number of tests which experienced an error--an unexpected
+        exception thrown while executing the test.
+
+    DEPFAIL
+        The number of tests which could not be executed because tests
+        they were dependent on failed.
+
+    'total'
+        The total number of tests considered for execution.
+
+    'threads'
+        The maximum number of threads which were utilized while
+        running tests.
+
+    Note that test fixtures are not included in these counts.  If a
+    test fixture fails (raises an AssertionError) or raises any other
+    exception, all tests dependent on that test fixture will fail due
+    to dependencies.  The msg() function will be passed the test
+    fixture descriptor.
+    """
+
     # Let's begin by making sure we're monkey-patched
     monkey_patch()
 
