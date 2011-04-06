@@ -13,10 +13,13 @@ DTestOutput to run().
 
 If this file is executed directly, the main() function--which first
 calls explore(), then returns the result of run()--is called, and its
-return value will be passed to sys.exit().
+return value will be passed to sys.exit().  Command line arguments are
+also available, and the module can be executed by passing "-m
+dtest.core" to the Python interpreter.
 """
 
 import imp
+from optparse import OptionParser
 import os
 import os.path
 import sys
@@ -599,6 +602,79 @@ def main(directory=None, maxth=None, skip=lambda dt: dt.skip,
     return run(maxth=maxth, skip=skip, output=output)
 
 
+def optparser(*args, **kwargs):
+    """
+    Builds and returns an option parser with the default options
+    recognized by the dtest framework.  All arguments are passed to
+    the OptionParser constructor.
+    """
+
+    # Set up an OptionParser
+    op = OptionParser(*args, **kwargs)
+
+    # Set up our default options
+    op.add_option("-d", "--directory",
+                  action="store", type="string", dest="directory",
+                  help="The directory to search for tests to run.")
+    op.add_option("-m", "--max-threads",
+                  action="store", type="int", dest="maxth",
+                  help="The maximum number of tests to run simultaneously; if "
+                  "not specified, an unlimited number of tests may run "
+                  "simultaneously.")
+    op.add_option("-s", "--skip",
+                  action="store", type="string", dest="skip",
+                  help="Specifies a rule to control which tests are skipped.  "
+                  "If value contains '=', tests having an attribute with the "
+                  "given value will be skipped.  If value does not contain "
+                  "'=', tests that have the attribute will be skipped.")
+    op.add_option("--no-skip",
+                  action="store_true", dest="noskip",
+                  help="Specifies that no test should be skipped.  Overrides "
+                  "--skip, if specified.")
+
+    # Return the OptionParser
+    return op
+
+
+def opts_to_args(options):
+    """
+    Converts an options object--as returned by calling the
+    parse_args() method of the return value from the optparser()
+    function--into a dictionary that can be fed to the main() function
+    to execute the desired test operation.
+    """
+
+    # Build the arguments dictionary
+    args = {}
+
+    # Start with the skip-related arguments
+    if options.noskip is True:
+        args['skip'] = lambda dt: False
+    elif options.skip is not None:
+        if '=' in options.skip:
+            k, v = options.skip.split('=', 1)
+            args['skip'] = lambda dt: getattr(dt, k, None) == v
+        else:
+            args['skip'] = lambda dt: hasattr(dt, options.skip)
+
+    # Now look at max threads
+    if options.maxth is not None:
+        args['maxth'] = options.maxth
+
+    # And, finally, directory
+    if options.directory is not None:
+        args['directory'] = options.directory
+
+    # Return the built arguments object
+    return args
+
+
 if __name__ == '__main__':
+    # Obtain the options
+    opts = optparser(usage="%prog [options]")
+
+    # Process command-line arguments
+    (options, args) = opts.parse_args()
+
     # Execute the test suite
-    sys.exit(main())
+    sys.exit(main(**opts_to_args(options)))
