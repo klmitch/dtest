@@ -6,8 +6,8 @@ Test Running
 This module contains the run_test() function and the associated Queue
 class, which together provide the functionality for executing tests in
 a threaded manner while properly handling ordering implied by
-dependencies.  Output is specified by passing references to functions
-in to run_test().
+dependencies.  Output is specified by passing an instance of
+DTestOutput to run_tests().
 """
 
 import sys
@@ -218,127 +218,192 @@ class Queue(object):
                 self.th_event.send()
 
 
-def _msg(test, m=None, hdr=''):
+class DTestOutput(object):
     """
-    Default msg() function for run_tests().  The ``test`` argument
-    specifies the test being run.  The ``m`` argument will be None or
-    an instance of DTestMessage; in the latter case, the ``hdr``
-    argument will specify a header to identify the origin of the
-    message.
+    DTestOutput
+    ===========
 
-    In the case that ``m`` is None, a header identifying the test is
-    emitted; otherwise, the message is emitted, prefixed by the header
-    if one is specified.  Exception information is emitted before any
-    output.
-    """
-
-    # Determine line width
-    lw = DEF_LINEWIDTH
-
-    # Output the banner if m is None
-    if m is None:
-        print
-        print "=" * lw
-        print str(test).center(lw)
-        print "=" * lw
-        return
-
-    # Output header information
-    if hdr:
-        print hdr.center(lw)
-        print '-' * lw
-
-    # Format exception information
-    if m.exc_type is not None:
-        # Emit the exception information
-        print (' Exception %s ' % m.exc_type.__name__).center(lw, '-')
-        traceback.print_exception(m.exc_type, m.exc_value, m.exc_tb)
-
-    # Format output data
-    for name, desc, value in m.captured:
-        print (' %s ' % desc).center(lw, '-')
-        print value.rstrip()
-
-    # Emit a closing line
-    print '-' * lw
-
-
-def _summary(counts):
-    """
-    Default summary() function for run_tests().  The ``counts``
-    argument specifies the counts for each type of test result.
-
-    Outputs a summary indicating the total number of tests executed
-    and the number of threads that were used to execute the tests,
-    then outputs a variable number of lines to summarize the count of
-    each type of result.
+    The DTestOutput class is a utility class for grouping together all
+    output generation for the test framework.  The ``output``
+    attribute contains a stream-like object to which output may be
+    sent, and defaults to sys.__stdout__ (note that sys.stdout may be
+    captured as the output of a test).  The notify() method is called
+    whenever a test or test fixture transitions to an alternate state;
+    the result() method is called to output the results of a test; and
+    the summary() method is called to output a summary of the results
+    of a test.  The default implementations of these methods send
+    their output to the stream in the ``output`` attribute, but each
+    may be overridden to perform alternate output.  This could, for
+    instance, be used to display test framework output in a GUI or to
+    generate a web page.
     """
 
-    # Emit summary data
-    print ("%d tests run in %d max simultaneous threads" %
-           (counts['total'], counts['threads']))
-    if counts[OK] > 0:
-        unexp = ''
-        if counts[UOK] > 0:
-            unexp = ' (%d unexpected)' % counts[UOK]
-        print "  %d tests successful%s" % (counts[OK], unexp)
-    if counts[SKIPPED] > 0:
-        print "  %d tests skipped" % counts[SKIPPED]
-    if counts[FAIL] + counts[ERROR] + counts[DEPFAIL] > 0:
-        # Set up the breakdown
-        bd = []
-        total = 0
-        if counts[FAIL] > 0:
-            exp = ''
-            if counts[XFAIL] > 0:
-                exp = ' [%d expected]' % counts[XFAIL]
-            bd.append('%d failed%s' % (counts[FAIL], exp))
-            total += counts[FAIL]
-        if counts[ERROR] > 0:
-            bd.append('%d errors' % counts[ERROR])
-            total += counts[ERROR]
-        if counts[DEPFAIL] > 0:
-            bd.append('%d failed due to dependencies' % counts[DEPFAIL])
-            total += counts[DEPFAIL]
+    def __init__(self, output=sys.__stdout__, linewidth=DEF_LINEWIDTH):
+        """
+        Initialize a DTestOutput object with the given ``output``
+        stream (defaults to sys.__stdout__) and linewidth.
+        """
 
-        print "  %d tests failed (%s)" % (total, ', '.join(bd))
+        # Save the output and linewidth
+        self.output = output
+        self.linewidth = linewidth
+
+    def notify(self, test, state):
+        """
+        Called when a test or test fixture, identified by ``test``,
+        transitions to ``state``.  The default implementation ignores
+        state transitions by test fixtures or transitions to the
+        RUNNING state.
+        """
+
+        # Are we interested in this test?
+        if not test.istest() or state == RUNNING:
+            return
+
+        # Determine the name of the test
+        name = str(test)
+
+        # Determine the width of the test name field
+        width = self.linewidth - len(state) - 1
+
+        # Truncate the name, if necessary
+        if len(name) > width:
+            name = name[:width - 3] + '...'
+
+        # Emit the status message
+        print >>self.output, "%-*s %s" % (width, name, state)
+
+    def result(self, result):
+        """
+        Called at the end of a test run to emit ``result`` information
+        for a given test.  Called once for each result.  Should emit
+        all exception and captured output information, if any.  Will
+        also be called for results from test fixtures, in order to
+        emit errors encountered while executing them.  The default
+        implementation ignores results containing no messages.
+        """
+
+        # Helper for reporting output
+        def out_msg(msg, hdr=None):
+            # Output header information
+            if hdr:
+                print >>self.output, (hdr.center(self.linewidth) + "\n" +
+                                      ('-' * self.linewidth))
+
+            # Output exception information
+            if msg.exc_type is not None:
+                exc_hdr = ' Exception %s ' % msg.exc_type.__name__
+                tb = ''.join(traceback.format_exception(msg.exc_type,
+                                                        msg.exc_value,
+                                                        msg.exc_tb))
+                print >>self.output, exc_hdr.center(self.linewidth, '-')
+                print >>self.output, tb.rstrip()
+
+            # Format output data
+            for name, desc, value in msg.captured:
+                print >>self.output, (' %s ' % desc).center(self.linewidth,
+                                                            '-')
+                print >>self.output, value.rstrip()
+
+            # Emit a closing line
+            print >>self.output, '-' * self.linewidth
+
+        # Skip results with no messages
+        if len(result) == 0:
+            return
+
+        # Emit a banner for the result
+        print >>self.output, ("\n" + ("=" * self.linewidth) + "\n" +
+                              str(result.test).center(self.linewidth) + "\n" +
+                              ("=" * self.linewidth))
+
+        # Emit the data for each step
+        if PRE in result:
+            out_msg(result[PRE], 'Pre-test Fixture')
+        if TEST in result:
+            out_msg(result[TEST])
+        if POST in result:
+            out_msg(result[POST], 'Post-test Fixture')
+
+    def summary(self, counts):
+        """
+        Called at the end of a test run to emit summary information
+        about the run.  The ``counts`` argument is a dictionary
+        containing the following keys:
+
+        OK
+            The number of tests which passed.  This includes the count of
+            unexpected passes (tests marked with the @failing decorator
+            which passed).
+
+        UOK
+            The number of tests which unexpectedly passed.
+
+        SKIPPED
+            The number of tests which were skipped in this test run.
+
+        FAIL
+            The number of tests which failed.  This includes the count of
+            expected failures (tests marked with the @failing decorator
+            which failed).
+
+        XFAIL
+            The number of tests which failed, where failure was expected.
+
+        ERROR
+            The number of tests which experienced an error--an unexpected
+            exception thrown while executing the test.
+
+        DEPFAIL
+            The number of tests which could not be executed because tests
+            they were dependent on failed.
+
+        'total'
+            The total number of tests considered for execution.
+
+        'threads'
+            The maximum number of threads which were utilized while
+            running tests.
+
+        Note that test fixtures are not included in these counts.  If a
+        test fixture fails (raises an AssertionError) or raises any other
+        exception, all tests dependent on that test fixture will fail due
+        to dependencies.
+        """
+
+        # Emit summary data
+        print >>self.output, ("%d tests run in %d max simultaneous threads" %
+                              (counts['total'], counts['threads']))
+        if counts[OK] > 0:
+            unexp = ''
+            if counts[UOK] > 0:
+                unexp = ' (%d unexpected)' % counts[UOK]
+            print >>self.output, ("  %d tests successful%s" %
+                                  (counts[OK], unexp))
+        if counts[SKIPPED] > 0:
+            print >>self.output, "  %d tests skipped" % counts[SKIPPED]
+        if counts[FAIL] + counts[ERROR] + counts[DEPFAIL] > 0:
+            # Set up the breakdown
+            bd = []
+            total = 0
+            if counts[FAIL] > 0:
+                exp = ''
+                if counts[XFAIL] > 0:
+                    exp = ' [%d expected]' % counts[XFAIL]
+                bd.append('%d failed%s' % (counts[FAIL], exp))
+                total += counts[FAIL]
+            if counts[ERROR] > 0:
+                bd.append('%d errors' % counts[ERROR])
+                total += counts[ERROR]
+            if counts[DEPFAIL] > 0:
+                bd.append('%d failed due to dependencies' % counts[DEPFAIL])
+                total += counts[DEPFAIL]
+
+            print >>self.output, ("  %d tests failed (%s)" %
+                                  (total, ', '.join(bd)))
 
 
-def _notify(test, state):
-    """
-    Default notify() function for run_tests().  The ``test`` argument
-    specifies the test or test fixture, and the ``state`` argument
-    indicates the state the test is transitioning to.
-
-    This implementation ignores test fixtures or transitions to the
-    RUNNING state, and emits messages to sys.__stdout__ (since
-    sys.stdout is being captured) containing the name of the test and
-    the state being transitioned to.  This provides visual display of
-    the result of a test.
-    """
-
-    lw = DEF_LINEWIDTH
-
-    # Are we interested in this test?
-    if not test.istest() or state == RUNNING:
-        return
-
-    # Determine the name of the test
-    name = str(test)
-
-    # Determine the width of the test name field
-    width = lw - len(state) - 1
-
-    # Truncate the name, if necessary
-    if len(name) > width:
-        name = name[:width - 3] + '...'
-
-    # Emit the status message
-    print >>sys.__stdout__, "%-*s %s" % (width, name, state)
-
-
-def run_tests(maxth=None, skip=lambda dt: dt.skip,
-              notify=_notify, msg=_msg, summary=_summary):
+def run_tests(maxth=None, skip=lambda dt: dt.skip, output=DTestOutput()):
     """
     Run all defined tests.  The ``maxth`` argument, if an integer,
     indicates the maximum number of simultaneously executing threads
@@ -346,72 +411,24 @@ def run_tests(maxth=None, skip=lambda dt: dt.skip,
     which, when passed a test, returns True to indicate that that test
     should be skipped; by default, it returns the value of the
     ``skip`` attribute on the test, which may be set using the @skip
-    decorator.  The ``notify`` argument specifies a function which
-    takes as arguments the test and a state the test is transitioning
-    to; it may emit status information to sys.__stdout__ (note that
-    sys.stdout is captured while tests are running).  The ``msg``
-    argument specifies a function which takes as arguments the test, a
-    DTestMessage object, and a string header (note that the latter two
-    arguments *must* be optional); the msg() function will be called
-    first with just the test, after which it will be called once for
-    each saved message.  If no messages are saved for a given test,
-    the msg() function will not be called on that test.  Finally, the
-    ``summary`` argument specifies a function which takes as its sole
-    argument a dictionary with summary counts of each type of result.
-    The keys are as follows:
-
-    OK
-        The number of tests which passed.  This includes the count of
-        unexpected passes (tests marked with the @failing decorator
-        which passed).
-
-    UOK
-        The number of tests which unexpectedly passed.
-
-    SKIPPED
-        The number of tests which were skipped in this test run.
-
-    FAIL
-        The number of tests which failed.  This includes the count of
-        expected failures (tests marked with the @failing decorator
-        which failed).
-
-    XFAIL
-        The number of tests which failed, where failure was expected.
-
-    ERROR
-        The number of tests which experienced an error--an unexpected
-        exception thrown while executing the test.
-
-    DEPFAIL
-        The number of tests which could not be executed because tests
-        they were dependent on failed.
-
-    'total'
-        The total number of tests considered for execution.
-
-    'threads'
-        The maximum number of threads which were utilized while
-        running tests.
-
-    Note that test fixtures are not included in these counts.  If a
-    test fixture fails (raises an AssertionError) or raises any other
-    exception, all tests dependent on that test fixture will fail due
-    to dependencies.  The msg() function will be passed the test
-    fixture descriptor.
+    decorator.  The ``output`` argument specifies an instance of
+    DTestOutput, which is expected to implement notify(), result(),
+    and summary() methods to generate the relevant output in the
+    desired format; see the documentation for DTestOutput for more
+    information.
     """
 
     # Let's begin by making sure we're monkey-patched
     monkey_patch()
 
     # Now, initialize the test queue...
-    q = Queue(maxth, skip, notify)
+    q = Queue(maxth, skip, output.notify)
 
     # Install the capture proxies...
     capture.install()
 
     # Run the tests
-    results = q.run(notify)
+    results = q.run(output.notify)
 
     # Uninstall the capture proxies
     capture.uninstall()
@@ -439,21 +456,7 @@ def run_tests(maxth=None, skip=lambda dt: dt.skip,
         elif r.state == XFAIL:
             cnt[FAIL] += int(r.test)
 
-        if len(r) > 0:
-            # Emit the header
-            msg(r.test)
-
-            # Emit data from the pre-test fixture...
-            if PRE in r:
-                msg(r.test, r[PRE], 'Pre-test Fixture')
-
-            # ...from the test itself...
-            if TEST in r:
-                msg(r.test, r[TEST])
-
-            # ...and from the post-test fixture
-            if POST in r:
-                msg(r.test, r[POST], 'Post-test Fixture')
+        output.result(r)
 
     # Emit summary data
-    summary(cnt)
+    output.summary(cnt)
