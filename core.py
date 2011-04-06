@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 """
 ============
 Test Running
@@ -8,6 +10,10 @@ class, which together provide the functionality for executing tests in
 a threaded manner while properly handling ordering implied by
 dependencies.  Output is specified by passing an instance of
 DTestOutput to run().
+
+If this file is executed directly, the main() function--which first
+calls explore(), then returns the result of run()--is called, and its
+return value will be passed to sys.exit().
 """
 
 import imp
@@ -573,3 +579,26 @@ def explore(directory=None):
     # We have finished loading all tests; restore the original import
     # path
     sys.path = tmppath
+
+
+def main(directory=None, maxth=None, skip=lambda dt: dt.skip,
+         output=DTestOutput()):
+    """
+    Discover tests under ``directory`` (by default, the current
+    directory), then run the tests under control of ``maxth``,
+    ``skip``, and ``output`` (see the documentation for the run()
+    function for more information on these three parameters).  Returns
+    True if all tests (with the exclusion of expected failures)
+    passed, False if a failure or error was encountered.
+    """
+
+    # First, discover the tests of interest
+    explore(directory)
+
+    # Now, let's execute the tests
+    return run(maxth=maxth, skip=skip, output=output)
+
+
+if __name__ == '__main__':
+    # Execute the test suite
+    sys.exit(main())
