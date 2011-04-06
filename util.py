@@ -1,3 +1,17 @@
+"""
+==============
+Test Utilities
+==============
+
+This module contains a number of utilities for use by tests.  The use
+of these utilities is not mandatory--a simple ``assert`` statement
+will work fine--but the utilities provided may assist in evaluating
+complicated assertions.  Most of these utilities are similar to the
+unittest.TestCase methods of similar names--for instance, the
+assert_false() utility is identical in action to
+unittest.TestCase.assertFalse().
+"""
+
 import re
 
 from dtest.exceptions import DTestException
@@ -16,6 +30,13 @@ __all__ = ['assert_false', 'assert_true', 'assert_raises', 'assert_equal',
 
 
 def safe_repr(obj, maxlen=None):
+    """
+    Helper function to safely determine the representation of ``obj``.
+    This function can be used in the case that the user-provided
+    __repr__() method raises an exception.  The ``maxlen`` argument,
+    if given, provides a maximum length for the representation.
+    """
+
     # Safely get the representation of an object
     try:
         result = repr(obj)
@@ -32,6 +53,13 @@ def safe_repr(obj, maxlen=None):
 
 
 def select_msg(usermsg, defmsg):
+    """
+    Helper function to select a message.  If ``usermsg`` is None,
+    ``defmsg`` will be returned; otherwise, ``usermsg`` will be
+    returned.  This allows users to specify alternate messages to emit
+    if an assertion fails.
+    """
+
     # Select the correct message to use
     if usermsg is None:
         return defmsg
@@ -39,6 +67,13 @@ def select_msg(usermsg, defmsg):
 
 
 def make_re(regexp):
+    """
+    Helper function to build a regular expression object.  If
+    ``regexp`` is a string, it will be compiled into a regular
+    expression object; otherwise, ``regexp`` will be returned
+    unmodified.
+    """
+
     # If it's None or not an instance of string, return it
     if regexp is None or not isinstance(regexp, basestring):
         return regexp
@@ -48,6 +83,10 @@ def make_re(regexp):
 
 
 def assert_false(expr, msg=None):
+    """
+    Assert that ``expr`` evaluate to False.
+    """
+
     # Ensure expr is False
     if expr:
         msg = select_msg(msg, "%s is not False" % safe_repr(expr))
@@ -55,6 +94,10 @@ def assert_false(expr, msg=None):
 
 
 def assert_true(expr, msg=None):
+    """
+    Assert that ``expr`` evaluate to True.
+    """
+
     # Ensure expr is True
     if not expr:
         msg = select_msg(msg, "%s is not True" % safe_repr(expr))
@@ -62,15 +105,43 @@ def assert_true(expr, msg=None):
 
 
 class AssertRaisesContext(object):
+    """
+    AssertRaisesContext
+    ===================
+
+    The AssertRaisesContext class is used by the assert_raises()
+    function as a context manager.  It ensures that the statement
+    executed within the context raises the expected exception(s).
+    """
+
     def __init__(self, excs, msg, regexp=None):
+        """
+        Initializes an AssertRaisesContext object.  The ``excs``
+        argument should be a tuple of legal exceptions (None indicates
+        that not raising an exception is also legal), and ``msg`` is
+        the user-specified message.  If ``regexp`` is not None, then
+        the exception raised must match the regular expression.
+        """
+
         self.excs = excs
         self.msg = msg
         self.regexp = make_re(regexp)
 
     def __enter__(self):
+        """
+        Enters the context manager.  Returns the context itself.
+        """
+
         return self
 
     def __exit__(self, exc_type, exc_value, tb):
+        """
+        Exits the context manager.  Compares any exception raised to
+        the expectations set when this context manager was
+        initialized.  If the expectations are not met, an
+        AssertionError will be raised.
+        """
+
         # Ensure the appropriate exception was raised
         if exc_type is None:
             if None in self.excs:
@@ -102,6 +173,10 @@ class AssertRaisesContext(object):
 
     @staticmethod
     def _exc_name(exc):
+        """
+        Helper method to safely determine an exception's name.
+        """
+
         try:
             # If it has a name, return it
             return exc.__name__
@@ -111,6 +186,29 @@ class AssertRaisesContext(object):
 
 
 def assert_raises(excepts, *args, **kwargs):
+    """
+    Assert that an exception specified by ``excepts`` is raised.  If
+    ``excepts`` is a tuple, any listed exception will be acceptable;
+    if None is specified as an exception, not raising an exception
+    will also be acceptable.  With no other arguments, returns a
+    context manager that can be used in a ``with`` statement.  If one
+    additional argument is specified, or the ``callableObj`` keyword
+    argument is specified, the callable so specified will be called
+    directly.  A ``callableObj`` keyword argument overrides any
+    callables specified as additional arguments.  All remaining
+    arguments and keyword arguments will be passed to the callable.
+
+    There are two other special-purpose keyword arguments.  The
+    ``noRaiseMsg`` keyword argument may be used to specify an
+    alternate message to use in the event that no exception is raised
+    by the callable.  The ``matchRegExp`` keyword argument may be used
+    to specify that the exception must match the given regular
+    expression, which must be either a string or a regular expression
+    object supporting the search() method.  If present, these keyword
+    arguments will be removed from the set of keyword arguments before
+    calling the callable.
+    """
+
     # Extract callableObj from arguments
     callableObj = None
     if 'callableObj' in kwargs:
@@ -151,6 +249,10 @@ def assert_raises(excepts, *args, **kwargs):
 
 
 def assert_equal(first, second, msg=None):
+    """
+    Assert that ``first`` is equal to ``second``.
+    """
+
     # Ensure first == second
     if not first == second:
         msg = select_msg(msg, "%s != %s" %
@@ -159,6 +261,10 @@ def assert_equal(first, second, msg=None):
 
 
 def assert_not_equal(first, second, msg=None):
+    """
+    Assert that ``first`` is not equal to ``second``.
+    """
+
     # Ensure first != second
     if not first != second:
         msg = select_msg(msg, "%s == %s" %
@@ -167,6 +273,15 @@ def assert_not_equal(first, second, msg=None):
 
 
 def assert_almost_equal(first, second, msg=None, places=None, delta=None):
+    """
+    Assert that ``first`` and ``second`` are almost equal.  Comparison
+    can be done either to within a given number of decimal places (7,
+    by default), or to within a given delta.  The delta is given using
+    the ``delta`` keyword argument, or the number of places can be
+    specified using ``places``.  Note that ``places`` and ``delta``
+    cannot both be specified.
+    """
+
     # Sanity-check arguments
     if places is not None and delta is not None:
         raise DTestException("Specify delta or places, not both")
@@ -202,6 +317,15 @@ def assert_almost_equal(first, second, msg=None, places=None, delta=None):
 
 
 def assert_not_almost_equal(first, second, msg=None, places=None, delta=None):
+    """
+    Assert that ``first`` and ``second`` are not almost equal.
+    Comparison can be done either to within a given number of decimal
+    places (7, by default), or to within a given delta.  The delta is
+    given using the ``delta`` keyword argument, or the number of
+    places can be specified using ``places``.  Note that ``places``
+    and ``delta`` cannot both be specified.
+    """
+
     # Sanity-check arguments
     if places is not None and delta is not None:
         raise DTestException("Specify delta or places, not both")
@@ -232,6 +356,11 @@ def assert_not_almost_equal(first, second, msg=None, places=None, delta=None):
 
 
 def assert_sequence_equal(seq1, seq2, msg=None, seq_type=None):
+    """
+    Assert that ``seq1`` and ``seq2`` have the same contents.  If
+    ``seq_type`` is specified, both sequences must be of that type.
+    """
+
     # Enforce sequence typing
     if seq_type is not None:
         st_name = seq_type.__name__
@@ -322,14 +451,27 @@ def assert_sequence_equal(seq1, seq2, msg=None, seq_type=None):
 
 
 def assert_list_equal(list1, list2, msg=None):
+    """
+    Assert that lists ``list1`` and ``list2`` have the same contents.
+    """
+
     assert_sequence_equal(list1, list2, msg=msg, seq_type=list)
 
 
 def assert_tuple_equal(tuple1, tuple2, msg=None):
+    """
+    Assert that tuples ``tuple1`` and ``tuple2`` have the same
+    contents.
+    """
+
     assert_sequence_equal(tuple1, tuple2, msg=msg, seq_type=tuple)
 
 
 def assert_set_equal(set1, set2, msg=None):
+    """
+    Assert that sets ``set1`` and ``set2`` have the same contents.
+    """
+
     # Obtain the two set differences
     try:
         diff1 = set1.difference(set2)
@@ -369,6 +511,10 @@ def assert_set_equal(set1, set2, msg=None):
 
 
 def assert_in(member, container, msg=None):
+    """
+    Assert that ``member`` is in ``container``.
+    """
+
     # Ensure member is in container
     if member not in container:
         msg = select_msg(msg, "%s not found in %s" %
@@ -377,6 +523,10 @@ def assert_in(member, container, msg=None):
 
 
 def assert_not_in(member, container, msg=None):
+    """
+    Assert that ``member`` is not in ``container``.
+    """
+
     # Ensure member is not in container
     if member in container:
         msg = select_msg(msg, "%s unexpectedly found in %s" %
@@ -385,6 +535,10 @@ def assert_not_in(member, container, msg=None):
 
 
 def assert_is(expr1, expr2, msg=None):
+    """
+    Assert that ``expr1`` is ``expr2``.
+    """
+
     # Ensure expr1 is expr2
     if expr1 is not expr2:
         msg = select_msg(msg, "%s is not %s" %
@@ -393,6 +547,10 @@ def assert_is(expr1, expr2, msg=None):
 
 
 def assert_is_not(expr1, expr2, msg=None):
+    """
+    Assert that ``expr1`` is not ``expr2``.
+    """
+
     # Ensure expr1 is not expr2
     if expr1 is expr2:
         msg = select_msg(msg, "%s is unexpectedly %s" %
@@ -401,6 +559,10 @@ def assert_is_not(expr1, expr2, msg=None):
 
 
 def assert_dict_equal(d1, d2, msg=None):
+    """
+    Assert that dictionaries ``d1`` and ``d2`` have the same contents.
+    """
+
     # Make sure both are dict instances
     if not isinstance(d1, dict):
         raise AssertionError("First argument is not a dictionary")
@@ -414,6 +576,11 @@ def assert_dict_equal(d1, d2, msg=None):
 
 
 def assert_dict_contains(actual, expected, msg=None):
+    """
+    Assert that the dictionary ``actual`` contains the elements in
+    ``expected``; extra elements are ignored.
+    """
+
     # Determine missing or mismatched keys
     missing = []
     mismatched = []
@@ -443,6 +610,13 @@ def assert_dict_contains(actual, expected, msg=None):
 
 
 def assert_items_equal(actual, expected, msg=None):
+    """
+    Assert that ``actual`` and ``expected`` contain the same items.
+    Note that this function is implemented using an n^2 algorithm and
+    so should likely not be used if ``actual`` or ``expected`` contain
+    large numbers of items.
+    """
+
     # Order n^2 algorithm for comparing items in the lists
     missing = []
     while expected:
@@ -474,6 +648,10 @@ def assert_items_equal(actual, expected, msg=None):
 
 
 def assert_less(a, b, msg=None):
+    """
+    Assert that ``a`` is less than ``b``.
+    """
+
     # Ensure a < b
     if not a < b:
         msg = select_msg(msg, "%s not less than %s" %
@@ -482,6 +660,10 @@ def assert_less(a, b, msg=None):
 
 
 def assert_less_equal(a, b, msg=None):
+    """
+    Assert that ``a`` is less than or equal to ``b``.
+    """
+
     # Ensure a <= b
     if not a <= b:
         msg = select_msg(msg, "%s not less than or equal to %s" %
@@ -490,6 +672,10 @@ def assert_less_equal(a, b, msg=None):
 
 
 def assert_greater(a, b, msg=None):
+    """
+    Assert that ``a`` is greater than ``b``.
+    """
+
     # Ensure a > b
     if not a > b:
         msg = select_msg(msg, "%s not greater than %s" %
@@ -498,6 +684,10 @@ def assert_greater(a, b, msg=None):
 
 
 def assert_greater_equal(a, b, msg=None):
+    """
+    Assert that ``a`` is greater than or equal to ``b``.
+    """
+
     # Ensure a >= b
     if not a >= b:
         msg = select_msg(msg, "%s not greater than or equal to %s" %
@@ -506,6 +696,10 @@ def assert_greater_equal(a, b, msg=None):
 
 
 def assert_is_none(obj, msg=None):
+    """
+    Assert that ``obj`` is None.
+    """
+
     # Ensure obj is None
     if obj is not None:
         msg = select_msg(msg, "%s is not None" % safe_repr(obj))
@@ -513,6 +707,10 @@ def assert_is_none(obj, msg=None):
 
 
 def assert_is_not_none(obj, msg=None):
+    """
+    Assert that ``obj`` is not None.
+    """
+
     # Ensure obj is not None
     if obj is None:
         msg = select_msg(msg, "%s is None" % safe_repr(obj))
@@ -520,6 +718,10 @@ def assert_is_not_none(obj, msg=None):
 
 
 def assert_is_instance(obj, cls, msg=None):
+    """
+    Assert that ``obj`` is an instance of class ``cls``.
+    """
+
     # Ensure obj is an instance of cls
     if not isinstance(obj, cls):
         msg = select_msg(msg, "%s is not an instance of %r" %
@@ -528,6 +730,10 @@ def assert_is_instance(obj, cls, msg=None):
 
 
 def assert_is_not_instance(obj, cls, msg=None):
+    """
+    Assert that ``obj`` is not an instance of class ``cls``.
+    """
+
     # Ensure obj is not an instance of cls
     if isinstance(obj, cls):
         msg = select_msg(msg, "%s is an instance of %r" %
@@ -536,6 +742,12 @@ def assert_is_not_instance(obj, cls, msg=None):
 
 
 def assert_regexp_matches(text, regexp, msg=None):
+    """
+    Assert that ``text`` matches the regular expression ``regexp``.
+    The regular expression may be either a string or a regular
+    expression object supporting the search() method.
+    """
+
     # Get the regular expression
     regexp = make_re(regexp)
 
@@ -547,6 +759,12 @@ def assert_regexp_matches(text, regexp, msg=None):
 
 
 def assert_not_regexp_matches(text, regexp, msg=None):
+    """
+    Assert that ``text`` does not match the regular expression
+    ``regexp``.  The regular expression may be either a string or a
+    regular expression object supporting the search() method.
+    """
+
     # Get the regular expression
     regexp = make_re(regexp)
 
