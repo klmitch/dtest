@@ -42,19 +42,20 @@ class Queue(object):
     Implementation Details
     ----------------------
 
-    The ``sem`` attribute is either None or a Semaphore instance used
-    to cap the number of threads that can be running at any given
-    time.  The ``tests`` attribute is a utility attribute containing
-    the list of defined tests, while the ``waiting`` attribute is a
-    set containing all tests which are still waiting to be run
-    (skipped tests will never appear in this set).  Thread safety
-    requires that accesses to the ``waiting`` attribute be locked, so
-    a Semaphore instance is stored in the ``waitlock`` parameter for
-    this purpose.  Finally, the ``th_count`` and ``th_max`` attributes
-    maintain a count of currently executing threads and the maximum
-    thread count observed, respectively, while ``th_event`` contains
-    an Event instance which is signaled once it is determined that all
-    tests have been run.
+    The ``notify`` attribute references the notify function to be
+    passed when running a test.  The ``sem`` attribute is either None
+    or a Semaphore instance used to cap the number of threads that can
+    be running at any given time.  The ``tests`` attribute is a
+    utility attribute containing the list of defined tests, while the
+    ``waiting`` attribute is a set containing all tests which are
+    still waiting to be run (skipped tests will never appear in this
+    set).  Thread safety requires that accesses to the ``waiting``
+    attribute be locked, so a Semaphore instance is stored in the
+    ``waitlock`` parameter for this purpose.  Finally, the
+    ``th_count`` and ``th_max`` attributes maintain a count of
+    currently executing threads and the maximum thread count observed,
+    respectively, while ``th_event`` contains an Event instance which
+    is signaled once it is determined that all tests have been run.
     """
 
     def __init__(self, maxth, skip, notify):
@@ -77,6 +78,9 @@ class Queue(object):
         may be greater than ``maxth``.
         """
 
+        # Save notify for future use
+        self.notify = notify
+
         # maxth allows us to limit the number of simultaneously
         # executing threads
         if maxth is None:
@@ -97,7 +101,7 @@ class Queue(object):
 
             # Do we skip this one?
             if skip(dt):
-                dt._skipped(notify)
+                dt._skipped(self.notify)
             else:
                 waiting.append(dt)
 
@@ -112,14 +116,12 @@ class Queue(object):
         self.th_event = Event()
         self.th_max = 0
 
-    def spawn(self, tests, notify):
+    def spawn(self, tests):
         """
         Selects all ready tests from the set or list specified in
-        ``tests`` and spawns threads to execute them.  The ``notify``
-        argument specifies a notification function, as for __init__().
-        Note that the maximum thread count restriction is implemented
-        by having the thread wait on the ``sem`` Semaphore after being
-        spawned.
+        ``tests`` and spawns threads to execute them.  Note that the
+        maximum thread count restriction is implemented by having the
+        thread wait on the ``sem`` Semaphore after being spawned.
         """
 
         # Work with a copy of the tests
@@ -136,7 +138,7 @@ class Queue(object):
                     continue
 
                 # OK, check dependencies
-                elif test._depcheck(notify):
+                elif test._depcheck(self.notify):
                     # No longer waiting
                     self.waiting.remove(test)
 
@@ -144,7 +146,7 @@ class Queue(object):
                     self.th_count += 1
                     if self.th_count > self.th_max:
                         self.th_max = self.th_count
-                    spawn_n(self.run_test, test, notify)
+                    spawn_n(self.run_test, test)
 
                 # Dependencies failed; check if state changed and add
                 # its dependents if so
@@ -158,18 +160,16 @@ class Queue(object):
                     # the state change
                     tests.extend(list(test.dependents))
 
-    def run(self, notify):
+    def run(self):
         """
         Runs all tests that have been queued up in the Queue object.
-        The ``notify`` argument specifies a notification function, as
-        for __init__().  Does not return until all tests have been
-        run.  Note that if dependency cycles are present, this
-        function may hang.
+        Does not return until all tests have been run.  Note that if
+        dependency cycles are present, this function may hang.
         """
 
         # Walk through all the waiting tests; note the copy, to avoid
         # modifications to self.waiting from upsetting us
-        self.spawn(self.waiting, notify)
+        self.spawn(self.waiting)
 
         # Wait for all tests to finish
         if self.th_count > 0:
@@ -178,11 +178,10 @@ class Queue(object):
         # For convenience, return the full list of results
         return [t.result for t in self.tests]
 
-    def run_test(self, test, notify):
+    def run_test(self, test):
         """
-        Execute ``test``.  The ``notify`` argument specifies a
-        notification function, as for __init__().  This method is
-        meant to be run in a new thread.
+        Execute ``test``.  This method is meant to be run in a new
+        thread.
 
         Once a test is complete, the thread's dependents will be
         passed back to the spawn() method, in order to pick up and
@@ -200,10 +199,10 @@ class Queue(object):
             args.append(test.class_())
 
         # Execute the test
-        test(*args, _notify=notify)
+        test(*args, _notify=self.notify)
 
         # Now, walk through its dependents and check readiness
-        self.spawn(test.dependents, notify)
+        self.spawn(test.dependents)
 
         # All right, we're done; release the semaphore
         if self.sem is not None:
@@ -428,7 +427,7 @@ def run_tests(maxth=None, skip=lambda dt: dt.skip, output=DTestOutput()):
     capture.install()
 
     # Run the tests
-    results = q.run(output.notify)
+    results = q.run()
 
     # Uninstall the capture proxies
     capture.uninstall()
