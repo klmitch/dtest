@@ -10,6 +10,9 @@ dependencies.  Output is specified by passing an instance of
 DTestOutput to run_tests().
 """
 
+import imp
+import os
+import os.path
 import sys
 import traceback
 
@@ -460,3 +463,105 @@ def run_tests(maxth=None, skip=lambda dt: dt.skip, output=DTestOutput()):
 
     # Emit summary data
     output.summary(cnt)
+
+
+def explore(directory=None):
+    """
+    Explore ``directory`` (by default, the current working directory)
+    for all modules matching the test regular expression and import
+    them.  Each module imported will be further explored for tests.
+    This function may be used to discover all registered tests prior
+    to running them.
+    """
+
+    # Obtain the canonical directory name
+    if directory is None:
+        directory = os.getcwd()
+    else:
+        directory = os.path.abspath(directory)
+
+    # Now, let's jigger the import path
+    tmppath = sys.path
+    sys.path = [directory] + sys.path
+
+    # Need the allowable suffixes
+    suffixes = [sfx[0] for sfx in imp.get_suffixes()]
+
+    # Having done that, we now begin walking the directory tree
+    for root, dirs, files in os.walk(directory):
+        # Let's determine the module's package path
+        if root == directory:
+            pkgpath = ''
+        else:
+            sep = root[len(directory)]
+            subdir = root[len(directory) + 1:]
+            pkgpath = '.'.join(subdir.split(sep)) + '.'
+
+        # Start with files...
+        for f in files:
+            # Does it match the testRE?
+            if not test.testRE.match(f):
+                continue
+
+            # Only interested in files we can load
+            for sfx in suffixes:
+                if f.endswith(sfx):
+                    modname = f[:-len(sfx)]
+                    break
+            else:
+                # Can't load it, so skip it
+                continue
+
+            # Determine the module's full path
+            fullmodname = pkgpath + modname
+
+            # Let's try to import it
+            try:
+                mod = __import__(fullmodname)
+            except ImportError:
+                # Can't import it, so move on
+                continue
+
+            # OK, let's visit the module to discover all tests
+            test.visit_mod(mod)
+
+        # Now we want to determine which subdirectories are packages;
+        # they'll contain __init__.py
+        subdirs = []
+        for d in dirs:
+            # Only interested in directories which contain __init__.py
+            for sfx in suffixes:
+                if os.path.exists(os.path.join(root, d, '__init__' + sfx)):
+                    break
+            else:
+                # Not a package, so skip it
+                continue
+
+            # Does it match the testRE?
+            if not test.testRE.match(d):
+                # No, but let's continue exploring under it
+                subdirs.append(d)
+                continue
+
+            # Determine the package's full path
+            fullpkgname = pkgpath + d
+
+            # Let's try to import it
+            try:
+                pkg = __import__(fullpkgname)
+            except ImportError:
+                # Can't import it, no point exploring under it
+                continue
+
+            # Let's visit the package
+            test.visit_mod(pkg)
+
+            # We also want to explore under it
+            subdirs.append(d)
+
+        # Make sure to set up our pruned subdirectory list
+        dirs[:] = subdirs
+
+    # We have finished loading all tests; restore the original import
+    # path
+    sys.path = tmppath
