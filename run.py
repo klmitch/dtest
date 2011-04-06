@@ -42,7 +42,7 @@ class Queue(object):
     Implementation Details
     ----------------------
 
-    The ``notify`` attribute references the notify function to be
+    The ``output`` attribute references the output instance to be
     passed when running a test.  The ``sem`` attribute is either None
     or a Semaphore instance used to cap the number of threads that can
     be running at any given time.  The ``tests`` attribute is a
@@ -58,18 +58,19 @@ class Queue(object):
     is signaled once it is determined that all tests have been run.
     """
 
-    def __init__(self, maxth, skip, notify):
+    def __init__(self, maxth, skip, output):
         """
         Initialize a Queue.  The ``maxth`` argument must be either
         None or an integer specifying the maximum number of
-        simultaneous threads permitted.  The ``skip`` and ``notify``
-        arguments are function references; ``skip`` should take a test
-        and return True if the test should be skipped, and ``notify``
+        simultaneous threads permitted.  The ``skip`` arguments is
+        function references; it should take a test and return True if
+        the test should be skipped.  The ``output`` argument should be
+        an instance of DTestOutput containing a notify() method, which
         takes a test and the state to which it is transitioning, and
         may use that information to emit a test result.  Note that the
-        ``notify`` function will receive state transitions to the
-        RUNNING state, as well as state transitions for test fixtures;
-        callers may find the DTestBase.istest() method useful for
+        notify() method will receive state transitions to the RUNNING
+        state, as well as state transitions for test fixtures; callers
+        may find the DTestBase.istest() method useful for
         differentiating between regular tests and test fixtures for
         reporting purposes.
 
@@ -78,8 +79,8 @@ class Queue(object):
         may be greater than ``maxth``.
         """
 
-        # Save notify for future use
-        self.notify = notify
+        # Save output for future use
+        self.output = output
 
         # maxth allows us to limit the number of simultaneously
         # executing threads
@@ -101,7 +102,7 @@ class Queue(object):
 
             # Do we skip this one?
             if skip(dt):
-                dt._skipped(self.notify)
+                dt._skipped(self.output)
             else:
                 waiting.append(dt)
 
@@ -138,7 +139,7 @@ class Queue(object):
                     continue
 
                 # OK, check dependencies
-                elif test._depcheck(self.notify):
+                elif test._depcheck(self.output):
                     # No longer waiting
                     self.waiting.remove(test)
 
@@ -199,7 +200,7 @@ class Queue(object):
             args.append(test.class_())
 
         # Execute the test
-        test(*args, _notify=self.notify)
+        test(*args, _output=self.output)
 
         # Now, walk through its dependents and check readiness
         self.spawn(test.dependents)
@@ -421,7 +422,7 @@ def run_tests(maxth=None, skip=lambda dt: dt.skip, output=DTestOutput()):
     monkey_patch()
 
     # Now, initialize the test queue...
-    q = Queue(maxth, skip, output.notify)
+    q = Queue(maxth, skip, output)
 
     # Install the capture proxies...
     capture.install()

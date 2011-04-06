@@ -213,7 +213,7 @@ class DTestResult(object):
                 (self.__class__.__module__, self.__class__.__name__,
                  id(self), self._state, self._msgs.keys()))
 
-    def _transition(self, state=None, notify=None):
+    def _transition(self, state=None, output=None):
         """
         Performs a transition to the given ``state``.  If ``state`` is
         None, the state will be determined from the status of the
@@ -233,8 +233,8 @@ class DTestResult(object):
                 state = XFAIL if self._test._exp_fail else FAIL
 
         # Issue an appropriate notification
-        if notify is not None:
-            notify(self._test, state)
+        if output is not None:
+            output.notify(self._test, state)
 
         # Transition to the new state
         self._state = state

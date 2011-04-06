@@ -160,8 +160,8 @@ class DTestBase(object):
         the class or explicitly set (or overridden) by the setUp() and
         tearDown() methods to be executed before and after the actual
         test, respectively.  Returns the result of the test.  Note
-        that the ``_notify`` keyword argument is extracted and used as
-        a notify() function; see the run_tests() function for more
+        that the ``_output`` keyword argument is extracted and used to
+        call a notify() method; see the run_tests() function for more
         details.
         """
 
@@ -179,12 +179,12 @@ class DTestBase(object):
             return method(*args, **kwargs)
 
         # Extract the notification
-        notify = kwargs.get('_notify')
-        if '_notify' in kwargs:
-            del kwargs['_notify']
+        output = kwargs.get('_output')
+        if '_output' in kwargs:
+            del kwargs['_output']
 
         # Transition to the running state
-        self._result._transition(RUNNING, notify=notify)
+        self._result._transition(RUNNING, output=output)
 
         # Perform preliminary call
         if self._pre is not None:
@@ -202,7 +202,7 @@ class DTestBase(object):
                 do_call(self._post, args, kwargs)
 
         # Transition to the appropriate ending state
-        self._result._transition(notify=notify)
+        self._result._transition(output=output)
 
         # Return the result
         return self._result
@@ -406,7 +406,7 @@ class DTestBase(object):
         # Return the list of all tests
         return cls._tests.values()
 
-    def _depcheck(self, notify):
+    def _depcheck(self, output):
         """
         Performs a check of all this test's dependencies, to determine
         if the test can be executed.  This is an abstract method that
@@ -417,7 +417,7 @@ class DTestBase(object):
         # Abstract method; subclasses must define!
         raise Exception("Subclasses must implement _depcheck()")
 
-    def _skipped(self, notify):
+    def _skipped(self, output):
         """
         Marks this DTestBase instance as having been skipped.  This
         status propagates up and down the dependence graph, in order
@@ -428,17 +428,17 @@ class DTestBase(object):
         # Mark that this test has been skipped by transitioning the
         # state
         if self.state is None:
-            self._result._transition(SKIPPED, notify=notify)
+            self._result._transition(SKIPPED, output=output)
 
             # Propagate up to tests dependent on us
             for dt in self._revdeps:
-                dt._skipped(notify)
+                dt._skipped(output)
 
             # Also notify tests we're dependent on
             for dt in self._deps:
-                dt._notify_skipped(notify)
+                dt._notify_skipped(output)
 
-    def _notify_skipped(self, notify):
+    def _notify_skipped(self, output):
         """
         Notifies this DTestBase instance that a dependent has been
         skipped.  This is used by DTestFixture to identify when a
@@ -480,7 +480,7 @@ class DTest(DTestBase):
         # count
         return 1
 
-    def _depcheck(self, notify):
+    def _depcheck(self, output):
         """
         Performs a check of all this test's dependencies, to determine
         if the test can be executed.  Tests can only be executed if
@@ -492,11 +492,11 @@ class DTest(DTestBase):
             if (dep.state == FAIL or dep.state == ERROR or
                 dep.state == XFAIL or dep.state == DEPFAIL):
                 # Set our own state to DEPFAIL
-                self._result._transition(DEPFAIL, notify=notify)
+                self._result._transition(DEPFAIL, output=output)
                 return False
             elif dep.state == SKIPPED:
                 # Set our own state to SKIPPED
-                self._result._transition(SKIPPED, notify=notify)
+                self._result._transition(SKIPPED, output=output)
                 return False
             elif dep.state != OK and dep.state != UOK:
                 # Dependencies haven't finished up, yet
@@ -548,7 +548,7 @@ class DTestFixture(DTestBase):
         # Now, save our pair partner
         self._partner = setUp
 
-    def _depcheck(self, notify):
+    def _depcheck(self, output):
         """
         Performs a check of all this test fixture's dependencies, to
         determine if the test can be executed.  Test fixtures can only
@@ -564,11 +564,11 @@ class DTestFixture(DTestBase):
                 self._partner.state == ERROR or
                 self._partner.state == DEPFAIL):
                 # Set our own state to DEPFAIL
-                self._result._transition(DEPFAIL, notify=notify)
+                self._result._transition(DEPFAIL, output=output)
                 return False
             elif self._partner.state == SKIPPED:
                 # Set our own state to SKIPPED
-                self._result._transition(SKIPPED, notify=notify)
+                self._result._transition(SKIPPED, output=output)
                 return False
 
         # Other dependencies must not be un-run or in the RUNNING
@@ -582,7 +582,7 @@ class DTestFixture(DTestBase):
         # that state before running the fixture
         return True
 
-    def _skipped(self, notify):
+    def _skipped(self, output):
         """
         Marks this DTestFixture instance as having been skipped.  Test
         fixtures may only be skipped if *all* their dependencies have
@@ -597,9 +597,9 @@ class DTestFixture(DTestBase):
                 return
 
         # Call the superclass method
-        super(DTestFixture, self)._skipped(notify)
+        super(DTestFixture, self)._skipped(output)
 
-    def _notify_skipped(self, notify):
+    def _notify_skipped(self, output):
         """
         Notifies this DTestFixture instance that a dependent has been
         skipped.  If all the fixture's dependents have been skipped,
@@ -613,7 +613,7 @@ class DTestFixture(DTestBase):
                 return
 
         # Call the superclass's _skipped() method
-        super(DTestFixture, self)._skipped(notify)
+        super(DTestFixture, self)._skipped(output)
 
 
 def istest(func):
