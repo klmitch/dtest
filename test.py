@@ -792,7 +792,7 @@ def _mod_fixtures(modname):
         module = sys.modules['.'.join(mods[:i + 1])]
 
         # Make sure the module's been visited...
-        _visit_mod(module)
+        visit_mod(module)
 
         # Does the module have the fixture?
         setUp = None
@@ -820,10 +820,10 @@ def _mod_fixtures(modname):
     return (setUps, tearDowns)
 
 
-_testRE = re.compile(r'(?:^|[\b_\.-])[Tt]est')
+testRE = re.compile(r'(?:^|[\b_\.-])[Tt]est')
 
 
-def _visit_mod(mod):
+def visit_mod(mod):
     """
     Helper function which searches a module object, specified by
     ``mod``, for all tests and wraps discovered test fixtures in
@@ -863,7 +863,7 @@ def _visit_mod(mod):
             continue
 
         # Does it match the test RE?
-        if not isinstance(v, DTestBase) and not _testRE.match(k):
+        if not isinstance(v, DTestBase) and not testRE.match(k):
             continue
 
         # Is it already a test?
@@ -951,7 +951,7 @@ class DTestCaseMeta(type):
                 continue
 
             # Does it match the test RE?
-            if not isinstance(v, DTestBase) and not _testRE.match(k):
+            if not isinstance(v, DTestBase) and not testRE.match(k):
                 continue
 
             # Is it already a test?
