@@ -419,6 +419,8 @@ def run_tests(maxth=None, skip=lambda dt: dt.skip, output=DTestOutput()):
     and summary() methods to generate the relevant output in the
     desired format; see the documentation for DTestOutput for more
     information.
+
+    Returns True if all tests passed (excluding expected failures).
     """
 
     # Let's begin by making sure we're monkey-patched
@@ -463,6 +465,12 @@ def run_tests(maxth=None, skip=lambda dt: dt.skip, output=DTestOutput()):
 
     # Emit summary data
     output.summary(cnt)
+
+    # Return False if there were any unexpected failures or errors
+    if cnt[FAIL] > 0 or cnt[ERROR] > 0 or cnt[DEPFAIL] > 0:
+        return False
+
+    return True
 
 
 def explore(directory=None):
