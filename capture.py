@@ -107,7 +107,7 @@ class Capturer(object):
     methods are unimplemented.
 
     Two class variables are defined; the _capturers dictionary stores
-    a mapping from a Capturer ``name`` to a Capturer instances, while
+    a mapping from a Capturer ``name`` to a Capturer instance, while
     the _caporder list contains a list of Capturer ``name``s in the
     order in which they were instantiated.
     """
