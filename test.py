@@ -1,3 +1,19 @@
+"""
+=====
+Tests
+=====
+
+This module contains all the classes and decorators necessary for
+manipulating tests.  The DTestBase class is the root of the
+inheritance tree for DTest and DTestFixture, which respectively
+represent tests and test fixtures.  The DTestCaseMeta class is a
+metaclass for DTestCase, which is equivalent to unittest.TestCase for
+the dependency-based test framework.  This module also contains a
+number of decorators, such as @istest, @nottest, @skip, @failing,
+@attr(), @depends(), @raises(), and @timed(), along with the debugging
+utility function dot().
+"""
+
 import re
 import sys
 
@@ -12,9 +28,58 @@ CLASS = 'Class'
 
 
 class DTestBase(object):
+    """
+    DTestBase
+    =========
+
+    The DTestBase class is a base class for the DTest and DTestFixture
+    classes, and contains a number of common elements.  Most users
+    will only be interested in the attribute manipulation methods,
+    which allows attributes to be attached to tests (see also the
+    @attr() decorator); the stringification method, which generates a
+    string name for the test based on the function or method wrapped
+    by the DTestBase instance; and the following properties:
+
+    :result:
+        The result of the most recent test run; may be None if the
+        test has not yet been run.
+
+    :state:
+        The state of the most recent test run; may be None if the test
+        has not yet been run.
+
+    :test:
+        The actual function or method implementing the test.
+
+    :class_:
+        If the test is a method of a class, this property will be the
+        appropriate class; otherwise, None.
+
+    :skip:
+        True if the @skip decorator has been used on the test.
+
+    :dependencies:
+        The tests this test is dependent on.
+
+    :dependents:
+        The tests that are dependent on this test.
+
+    In addition, the setUp() and tearDown() methods are available to
+    identify special set up and tear down functions or methods to
+    override the class-level setUp() and tearDown() methods; these
+    methods may be used as decorators, assuming the test has been
+    decorated with the @istest decorator.  There is also an istest()
+    method, which by default returns False; this is overridden by the
+    DTest class to return True.
+    """
+
     _tests = {}
 
     def __new__(cls, test):
+        """
+        Look up or allocate a DTestBase instance wrapping ``test``.
+        """
+
         # If test is None, return None
         if test is None:
             return None
@@ -55,10 +120,20 @@ class DTestBase(object):
         return dt
 
     def __getattr__(self, key):
+        """
+        Retrieve the attribute with the given ``key``.  Attributes may
+        be set using the @attr() decorator.
+        """
+
         # Get the attribute out of the _attrs map
         return self._attrs[key]
 
     def __setattr__(self, key, value):
+        """
+        Update the attribute with the given ``key`` to ``value``.
+        Attributes may be initially set using the @attr() decorator.
+        """
+
         # Is it an internal attribute?
         if key[0] == '_':
             return super(DTestBase, self).__setattr__(key, value)
@@ -67,6 +142,11 @@ class DTestBase(object):
         self._attrs[key] = value
 
     def __delattr__(self, key):
+        """
+        Delete the attribute with the given ``key``.  Attributes may
+        be initially set using the @attr() decorator.
+        """
+
         # Is it an internal attribute?
         if key[0] == '_':
             return super(DTestBase, self).__delattr__(key)
@@ -75,6 +155,16 @@ class DTestBase(object):
         del self._attrs[key]
 
     def __call__(self, *args, **kwargs):
+        """
+        Perform the test.  Causes any fixtures discovered as part of
+        the class or explicitly set (or overridden) by the setUp() and
+        tearDown() methods to be executed before and after the actual
+        test, respectively.  Returns the result of the test.  Note
+        that the ``_notify`` keyword argument is extracted and used as
+        a notify() function; see the run_tests() function for more
+        details.
+        """
+
         # Need a helper to unwrap and call class methods and static
         # methods
         def do_call(method, args, kwargs):
@@ -118,23 +208,51 @@ class DTestBase(object):
         return self._result
 
     def __int__(self):
+        """
+        Returns the value of the instance in an integer context.
+        Normally returns 0, but DTest overrides this to return 1.
+        This makes counting tests and not test fixtures easy.
+        """
+
         # In an integer context, we're 0; this is how we can count the
         # number of tests
         return 0
 
     def __hash__(self):
+        """
+        Returns a hash code for this instance.  This allows instances
+        of DTestBase to be stored in a set or used as hash keys.
+        """
+
         # Return the hash of the backing test
         return hash(self._test)
 
     def __eq__(self, other):
+        """
+        Compares two instances of DTestBase for equality.  This allows
+        instances of DTestBase to be stored in a set or used as hash
+        keys.
+        """
+
         # Compare test objects
         return self._test is other._test
 
     def __ne__(self, other):
+        """
+        Compares two instances of DTestBase for inequality.  This is
+        for completeness, complementing __eq__().
+        """
+
         # Compare test objects
         return self._test is not other._test
 
     def __str__(self):
+        """
+        Generates a string representation of the test.  The string
+        representation is the fully qualified name of the wrapped
+        function or method.
+        """
+
         # Generate a string name for the test
         test = self._test if callable(self._test) else self._test.__func__
 
@@ -146,6 +264,12 @@ class DTestBase(object):
                              test.__name__])
 
     def __repr__(self):
+        """
+        Generates a representation of the test.  This augments the
+        standard __repr__() output to include the actual test function
+        or method wrapped by the DTestBase instance.
+        """
+
         # Generate a representation of the test
         return ('<%s.%s object at %#x wrapping %r>' %
                 (self.__class__.__module__, self.__class__.__name__,
@@ -153,12 +277,22 @@ class DTestBase(object):
 
     @property
     def result(self):
+        """
+        Retrieve the most recent result of running the test.  This may
+        be None if the test has not yet been run.
+        """
+
         # We want the result to be read-only, but to be accessed like
         # an attribute
         return self._result
 
     @property
     def state(self):
+        """
+        Retrieve the most recent state of the test.  This may be None
+        if the test has not yet been run.
+        """
+
         # We want the state to be read-only, but to be accessed like
         # an attribute; this is a short-cut for reading the state from
         # the result
@@ -166,60 +300,131 @@ class DTestBase(object):
 
     @property
     def test(self):
+        """
+        Retrieve the test function or method wrapped by this DTestBase
+        instance.
+        """
+
         # We want the test to be read-only, but to be accessed like an
         # attribute
         return self._test
 
     @property
     def class_(self):
+        """
+        Retrieve the class in which the test method was defined.  If
+        the wrapped test is a bare function, rather than a method,
+        this will be None.
+        """
+
         # We want the test's class to be read-only, but to be accessed
         # like an attribute
         return self._class
 
     @property
     def skip(self):
+        """
+        Retrieve the ``skip`` setting for the test.  This will be True
+        only if the @skip decorator has been used on the test;
+        otherwise, it will be False.
+        """
+
         # We want the test's skip setting to be read-only, but to be
         # accessed like an attribute
         return self._skip
 
     @property
     def dependencies(self):
+        """
+        Retrieve the set of tests this test is dependent on.  This
+        returns a frozenset.
+        """
+
         # We want the dependencies to be read-only, but to be accessed
         # like an attribute
         return frozenset(self._deps)
 
     @property
     def dependents(self):
+        """
+        Retrieve the set of tests that are dependent on this test.
+        This returns a frozenset.
+        """
+
         # We want the depedenents to be read-only, but to be accessed
         # like an attribute
         return frozenset(self._revdeps)
 
     def setUp(self, pre):
+        """
+        Explicitly set the setUp() function or method to be called
+        immediately prior to executing the test.  This can be used as
+        a decorator; however, the test in question must have been
+        decorated for this method to be available.  If no other
+        decorator is appropriate for the test, use the @istest
+        decorator.
+        """
+
         # Save the pre-test fixture.  This method can be used as a
         # decorator.
         self._pre = pre
         return pre
 
     def tearDown(self, post):
+        """
+        Explicitly set the tearDown() function or method to be called
+        immediately after executing the test.  This can be used as a
+        decorator; however, the test in question must have been
+        decorated for this method to be available.  If no other
+        decorator is appropriate for the test, use the @istest
+        decorator.
+        """
+
         # Save the post-test fixture.  This method can be used as a
         # decorator.
         self._post = post
         return post
 
     def istest(self):
+        """
+        Returns True if the instance is a test or False if the
+        instance is a test fixture.  For all instances of DTestBase,
+        returns False; the DTest class overrides this method to return
+        True.
+        """
+
         # Return True if this is a test
         return False
 
     @classmethod
     def tests(cls):
+        """
+        A class method that returns a list of all tests that have been
+        discovered by the framework.
+        """
+
         # Return the list of all tests
         return cls._tests.values()
 
     def _depcheck(self, notify):
+        """
+        Performs a check of all this test's dependencies, to determine
+        if the test can be executed.  This is an abstract method that
+        is overridden by the DTest and DTestFixture classes to
+        implement class-specific behavior.
+        """
+
         # Abstract method; subclasses must define!
         raise Exception("Subclasses must implement _depcheck()")
 
     def _skipped(self, notify):
+        """
+        Marks this DTestBase instance as having been skipped.  This
+        status propagates up and down the dependence graph, in order
+        to mark all dependents as skipped and to cause unneeded
+        fixtures to also be skipped.
+        """
+
         # Mark that this test has been skipped by transitioning the
         # state
         if self.state is None:
@@ -234,26 +439,58 @@ class DTestBase(object):
                 dt._notify_skipped(notify)
 
     def _notify_skipped(self, notify):
+        """
+        Notifies this DTestBase instance that a dependent has been
+        skipped.  This is used by DTestFixture to identify when a
+        given fixture should be skipped.
+        """
+
         # Regular tests don't care that some test dependent on them
         # has been skipped
         pass
 
     def _prepare(self):
+        """
+        Prepares this test for execution by allocating a DTestResult
+        instance.
+        """
+
         # Prepares the test for running by setting up a result
         self._result = result.DTestResult(self)
 
 
 class DTest(DTestBase):
+    """
+    DTest
+    =====
+
+    The DTest class represents individual tests to be executed.  It
+    inherits most of its elements from the DTestBase class, but
+    overrides the __int__(), _depcheck(), and istest() methods to
+    implement test-specific behavior.
+    """
+
     def __int__(self):
+        """
+        Returns the value of the instance in an integer context.
+        Returns 1 to make counting tests and not test fixtures easy.
+        """
+
         # This is a single test, so return 1 so we contribute to the
         # count
         return 1
 
     def _depcheck(self, notify):
+        """
+        Performs a check of all this test's dependencies, to determine
+        if the test can be executed.  Tests can only be executed if
+        all their dependencies have passed.
+        """
+
         # All dependencies must be OK
         for dep in self._deps:
             if (dep.state == FAIL or dep.state == ERROR or
-                dep.state == DEPFAIL):
+                dep.state == XFAIL or dep.state == DEPFAIL):
                 # Set our own state to DEPFAIL
                 self._result._transition(DEPFAIL, notify=notify)
                 return False
@@ -261,7 +498,7 @@ class DTest(DTestBase):
                 # Set our own state to SKIPPED
                 self._result._transition(SKIPPED, notify=notify)
                 return False
-            elif dep.state != OK:
+            elif dep.state != OK and dep.state != UOK:
                 # Dependencies haven't finished up, yet
                 return False
 
@@ -269,12 +506,38 @@ class DTest(DTestBase):
         return True
 
     def istest(self):
+        """
+        Returns True if the instance is a test or False if the
+        instance is a test fixture.  Overrides DTestBase.istest() to
+        return True.
+        """
+
         # Return True, since this is a test
         return True
 
 
 class DTestFixture(DTestBase):
+    """
+    DTestFixture
+    ============
+
+    The DTestFixture class represents test fixtures to be executed.
+    It inherits most of its elements from the DTestBase class, but
+    overrides the _depcheck(), _skipped(), and _notify_skipped()
+    methods to implement test fixture-specific behavior.  In addition,
+    provides the _set_partner() method, used for setting test fixture
+    partners.
+    """
+
     def _set_partner(self, setUp):
+        """
+        Sets the partner of a test fixture.  This method is called on
+        tear down-type fixtures to pair them with the corresponding
+        set up-type fixtures.  This ensures that a tear down fixture
+        will not run unless the corresponding set up fixture ran
+        successfully.
+        """
+
         # Sanity-check setUp
         if setUp is None:
             return
@@ -286,9 +549,18 @@ class DTestFixture(DTestBase):
         self._partner = setUp
 
     def _depcheck(self, notify):
+        """
+        Performs a check of all this test fixture's dependencies, to
+        determine if the test can be executed.  Test fixtures can only
+        be executed if their partner (if one is specified) has passed
+        and if all the tests the fixture is dependent on have finished
+        running or been skipped.
+        """
+
         # Make sure our partner succeeded
         if self._partner is not None:
             if (self._partner.state == FAIL or
+                self._partner.state == XFAIL or
                 self._partner.state == ERROR or
                 self._partner.state == DEPFAIL):
                 # Set our own state to DEPFAIL
@@ -311,6 +583,12 @@ class DTestFixture(DTestBase):
         return True
 
     def _skipped(self, notify):
+        """
+        Marks this DTestFixture instance as having been skipped.  Test
+        fixtures may only be skipped if *all* their dependencies have
+        been skipped.
+        """
+
         # Only bother if all our dependencies are also skipped--tear
         # down fixtures need to run any time the corresponding set up
         # fixtures have run
@@ -322,6 +600,12 @@ class DTestFixture(DTestBase):
         super(DTestFixture, self)._skipped(notify)
 
     def _notify_skipped(self, notify):
+        """
+        Notifies this DTestFixture instance that a dependent has been
+        skipped.  If all the fixture's dependents have been skipped,
+        then the test fixture will also be skipped.
+        """
+
         # If all tests dependent on us have been skipped, we don't
         # need to run
         for dep in self._revdeps:
@@ -333,17 +617,35 @@ class DTestFixture(DTestBase):
 
 
 def istest(func):
+    """
+    Decorates a function to indicate that the function is a test.  Can
+    be used if the @func.setUp or @func.tearDown decorators need to be
+    used, or if the test would not be picked up by the test discovery
+    regular expression.
+    """
+
     # Wrap func in a test
     return DTest(func)
 
 
 def nottest(func):
+    """
+    Decorates a function to indicate that the function is not a test.
+    Can be used if the test would be picked up by the test discovery
+    regular expression but should not be.  Works by setting the
+    ``_dt_nottest`` attribute on the function to True.
+    """
+
     # Mark that a function should not be considered a test
     func._dt_nottest = True
     return func
 
 
 def skip(func):
+    """
+    Decorates a test to indicate that the test should be skipped.
+    """
+
     # Get the DTest object for the test
     dt = DTest(func)
 
@@ -355,6 +657,10 @@ def skip(func):
 
 
 def failing(func):
+    """
+    Decorates a test to indicate that the test is expected to fail.
+    """
+
     # Get the DTest object for the test
     dt = DTest(func)
 
@@ -366,6 +672,15 @@ def failing(func):
 
 
 def attr(**kwargs):
+    """
+    Decorates a test to set attributes on the test.  Keyword arguments
+    are converted to attributes on the test.  Note that all attributes
+    beginning with underscore ("_") and the following list of
+    attributes are reserved: ``result``, ``state``, ``test``,
+    ``class_``, ``skip``, ``dependencies``, ``dependents``, ``setUp``,
+    ``tearDown``, ``istest``, and ``tests``.
+    """
+
     # Need a wrapper to perform the actual decoration
     def wrapper(func):
         # Get the DTest object for the test
@@ -382,6 +697,14 @@ def attr(**kwargs):
 
 
 def depends(*deps):
+    """
+    Decorates a test to indicate other tests the test depends on.
+    There is no need to explicitly specify test fixtures.  Take care
+    to not introduce dependency cycles.  Note that this decorator
+    takes references to the dependencies, and cannot handle dependency
+    names.
+    """
+
     # Need a wrapper to perform the actual decoration
     def wrapper(func):
         # Get the DTest object for the test
@@ -402,6 +725,13 @@ def depends(*deps):
 
 
 def raises(*exc_types):
+    """
+    Decorates a test to indicate that the test may raise an exception.
+    The valid exceptions are specified to the decorator as references.
+    The list may include None, in which case the test not raising an
+    exception is permissible.
+    """
+
     # Need a wrapper to perform the actual decoration
     def wrapper(func):
         # Get the DTest object for the test
@@ -418,6 +748,16 @@ def raises(*exc_types):
 
 
 def timed(timeout):
+    """
+    Decorates a test to indicate that the test must take less than
+    ``timeout`` seconds (floats permissible).  If the test takes more
+    than that amount of time, the test will fail.  Note that this uses
+    the Eventlet timeout mechanism, which depends on the test
+    cooperatively yielding; if the test exclusively performs
+    computation without sleeping or performing I/O, this timeout may
+    not trigger.
+    """
+
     # Need a wrapper to perform the actual decoration
     def wrapper(func):
         # Get the DTest object for the test
@@ -434,6 +774,14 @@ def timed(timeout):
 
 
 def _mod_fixtures(modname):
+    """
+    Helper function which searches a module's name heirarchy, based on
+    the textual ``modname``, to find all test fixtures that apply to
+    tests in that module.  Returns a tuple, where the first element is
+    a list of set up fixtures and the second element is a list of tear
+    down fixtures.
+    """
+
     # Split up the module name
     mods = modname.split('.')
 
@@ -476,6 +824,13 @@ _testRE = re.compile(r'(?:^|[\b_\.-])[Tt]est')
 
 
 def _visit_mod(mod):
+    """
+    Helper function which searches a module object, specified by
+    ``mod``, for all tests and wraps discovered test fixtures in
+    instances of DTestFixture.  Also sets up proper dependency
+    information.  Called by _mod_fixtures().
+    """
+
     # Have we visited the module before?
     if hasattr(mod, '_dt_visited') and mod._dt_visited:
         return
@@ -531,7 +886,25 @@ def _visit_mod(mod):
 
 
 class DTestCaseMeta(type):
+    """
+    DTestCaseMeta
+    =============
+
+    The DTestCaseMeta is a metaclass for DTestCase.  Before
+    constructing the class, discovers all tests and related test
+    fixtures (including module- and package-level fixtures) and sets
+    up dependencies as appropriate.  Also ensures that the ``class_``
+    attribute of tests and test fixtures is set appropriately.
+    """
+
     def __new__(mcs, name, bases, dict_):
+        """
+        Constructs a new class with the given ``name``, ``bases``, and
+        ``dict_``.  The ``dict_`` is searched for all tests and
+        class-level test fixtures, and the module- and package-level
+        test fixtures are attached using dependencies.
+        """
+
         # Look up any test fixtures for the individual tests...
         setUp = dict_.get(SETUP, None)
         tearDown = dict_.get(TEARDOWN, None)
@@ -625,10 +998,31 @@ class DTestCaseMeta(type):
 
 
 class DTestCase(object):
+    """
+    DTestCase
+    =========
+
+    The DTestCase class is a base class for classes of test methods.
+    It is constructed using the DTestCaseMeta metaclass.  Any classes
+    which contain tests must inherit from DTestCase or must use
+    DTestCaseMeta as a metaclass.
+    """
+
     __metaclass__ = DTestCaseMeta
 
 
 def dot(grname='testdeps'):
+    """
+    Constructs a GraphViz-compatible dependency graph with the given
+    name (``testdeps``, by default).  Returns the graph as a string.
+    The graph can be fed to the ``dot`` tool to generate a
+    visualization of the dependency graph.  Note that red nodes in the
+    graph indicate test fixtures, and red dashed edges indicate
+    dependencies associated with test fixtures.  If the node outline
+    is dotted, that indicates that the test was skipped in the most
+    recent test run.
+    """
+
     # Helper to generate node and edge options
     def mkopts(opts):
         # If there are no options, return an empty string
