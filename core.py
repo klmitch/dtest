@@ -7,7 +7,7 @@ This module contains the run_test() function and the associated Queue
 class, which together provide the functionality for executing tests in
 a threaded manner while properly handling ordering implied by
 dependencies.  Output is specified by passing an instance of
-DTestOutput to run_tests().
+DTestOutput to run().
 """
 
 import imp
@@ -406,7 +406,7 @@ class DTestOutput(object):
                                   (total, ', '.join(bd)))
 
 
-def run_tests(maxth=None, skip=lambda dt: dt.skip, output=DTestOutput()):
+def run(maxth=None, skip=lambda dt: dt.skip, output=DTestOutput()):
     """
     Run all defined tests.  The ``maxth`` argument, if an integer,
     indicates the maximum number of simultaneously executing threads

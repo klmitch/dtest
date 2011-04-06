@@ -42,7 +42,7 @@ Note that both dtest and dtest.util are safe for use with "import *".
 from dtest.capture import Capturer
 from dtest.constants import *
 from dtest.exceptions import DTestException
-from dtest.core import DTestOutput, run_tests, explore
+from dtest.core import DTestOutput, run, explore
 from dtest.test import istest, nottest, skip, failing, attr, depends, \
     raises, timed, DTestCase, dot
 
@@ -51,6 +51,6 @@ __all__ = ['Capturer',
            'RUNNING', 'FAIL', 'XFAIL', 'ERROR', 'DEPFAIL', 'OK', 'UOK',
            'SKIPPED',
            'DTestException',
-           'DTestOutput', 'run_tests', 'explore',
+           'DTestOutput', 'run', 'explore',
            'istest', 'nottest', 'skip', 'failing', 'attr', 'depends',
            'raises', 'timed', 'DTestCase', 'dot']
