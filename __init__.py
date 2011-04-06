@@ -42,7 +42,7 @@ Note that both dtest and dtest.util are safe for use with "import *".
 from dtest.capture import Capturer
 from dtest.constants import *
 from dtest.exceptions import DTestException
-from dtest.run import DTestOutput, run_tests, explore
+from dtest.core import DTestOutput, run_tests, explore
 from dtest.test import istest, nottest, skip, failing, attr, depends, \
     raises, timed, DTestCase, dot
 
