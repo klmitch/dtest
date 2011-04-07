@@ -23,7 +23,7 @@ with "test."  It is not even necessary to import any portion of the
 DTest framework.  If tests are collected in classes, however, or if
 use of the more advanced features of DTest is desired, a simple ``from
 dtest import *`` is necessary.  This makes available the ``DTestCase``
-class, which should be extended by all classes containing tests, as
+class--which should be extended by all classes containing tests--as
 well as such decorators as ``@skip`` and ``@nottest``.
 
 Tests may be performed using the standard Python ``assert`` statement;
@@ -78,7 +78,7 @@ necessary preceding ``test_something()``; here we used ``@istest``,
 but any other available DTest decorator could be used here.  This
 makes the ``@test_something.setUp`` and ``@test_something.tearDown``
 decorators available.  (For something analogous in the standard
-Python, check out the built-in @property decorator.)
+Python, check out the built-in ``@property`` decorator.)
 
 Running Tests
 =============
