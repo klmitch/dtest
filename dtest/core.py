@@ -606,7 +606,7 @@ def explore(directory=None):
 
 
 def main(directory=None, maxth=None, skip=lambda dt: dt.skip,
-         output=DTestOutput()):
+         output=DTestOutput(), dryrun=False, dotpath=None):
     """
     Discover tests under ``directory`` (by default, the current
     directory), then run the tests under control of ``maxth``,
@@ -619,8 +619,26 @@ def main(directory=None, maxth=None, skip=lambda dt: dt.skip,
     # First, discover the tests of interest
     explore(directory)
 
-    # Now, let's execute the tests
-    return run(maxth=maxth, skip=skip, output=output)
+    # Is this a dry run?
+    if not dryrun:
+        # Nope, execute the tests
+        result = run(maxth=maxth, skip=skip, output=output)
+    else:
+        result = True
+
+        # Print out the names of the tests
+        print "Discovered tests:\n"
+        for dt in test.DTestBase.tests():
+            if dt.istest():
+                print str(dt)
+
+    # Are we to dump the dependency graph?
+    if dotpath is not None:
+        with open(dotpath, 'w') as f:
+            print >>f, test.dot()
+
+    # Now, let's return the result of the test run
+    return result
 
 
 def optparser(*args, **kwargs):
@@ -652,6 +670,17 @@ def optparser(*args, **kwargs):
                   action="store_true", dest="noskip",
                   help="Specifies that no test should be skipped.  Overrides "
                   "--skip, if specified.")
+    op.add_option("-n", "--dry-run",
+                  action="store_true", dest="dryrun",
+                  help="Performs a dry run.  After discovering all tests, "
+                  "the list of tests is printed to standard output.")
+    op.add_option("--dot",
+                  action="store", type="string", dest="dotpath",
+                  help="After running tests, a text representation of the "
+                  "dependency graph is placed in the indicated file.  This "
+                  "file may then be passed to the \"dot\" tool of the "
+                  "GraphViz package to visualize the dependency graph.  "
+                  "This option may be used in combination with \"-n\".")
 
     # Return the OptionParser
     return op
@@ -681,6 +710,14 @@ def opts_to_args(options):
     # Now look at max threads
     if options.maxth is not None:
         args['maxth'] = options.maxth
+
+    # Are we doing a dry run?
+    if options.dryrun is True:
+        args['dryrun'] = True
+
+    # How about dumping the dependency graph?
+    if options.dotpath is not None:
+        args['dotpath'] = options.dotpath
 
     # And, finally, directory
     if options.directory is not None:
