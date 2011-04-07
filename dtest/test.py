@@ -1042,7 +1042,9 @@ def dot(grname='testdeps'):
         test = dt._test if callable(dt._test) else dt._test.__func__
 
         # Make the node
-        opts = dict(label=r'%s\n%r' % (dt, test))
+        opts = dict(label=r'%s\n%s:%d' %
+                    (dt, test.func_code.co_filename,
+                     test.func_code.co_firstlineno))
         if dt.state:
             opts['label'] += r'\n(Result: %s)' % dt.state
         if (dt.state == FAIL or dt.state == XFAIL or dt.state == ERROR or
