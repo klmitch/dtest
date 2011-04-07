@@ -1064,6 +1064,8 @@ def dot(grname='testdeps'):
             if (isinstance(dt, DTestFixture) or
                 isinstance(dep, DTestFixture)):
                 opts.update(dict(color='blue', style='dashed'))
+            if dt._partner is not None and dep == dt._partner:
+                opts['style'] = 'dotted'
 
             edges.append('"%s" -> "%s"%s;' % (dt, dep, mkopts(opts)))
 
