@@ -1043,10 +1043,15 @@ def dot(grname='testdeps'):
 
         # Make the node
         opts = dict(label=r'%s\n%r' % (dt, test))
-        if isinstance(dt, DTestFixture):
+        if (dt.state == FAIL or dt.state == XFAIL or dt.state == ERROR or
+            dt.state == DEPFAIL):
             opts['color'] = 'red'
+        elif isinstance(dt, DTestFixture):
+            opts['color'] = 'blue'
         if dt.state == SKIPPED:
             opts['style'] = 'dotted'
+        elif dt.state == DEPFAIL:
+            opts['style'] = 'dashed'
         nodes.append('"%s"%s;' % (dt, mkopts(opts)))
 
         # Make all the edges
@@ -1054,7 +1059,7 @@ def dot(grname='testdeps'):
             opts = {}
             if (isinstance(dt, DTestFixture) or
                 isinstance(dep, DTestFixture)):
-                opts.update(dict(color='red', style='dashed'))
+                opts.update(dict(color='blue', style='dashed'))
 
             edges.append('"%s" -> "%s"%s;' % (dt, dep, mkopts(opts)))
 
