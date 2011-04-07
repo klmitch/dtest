@@ -25,7 +25,7 @@ retrieve() method will be passed this object and must return a string
 consisting of all the output.  The install() and uninstall() methods
 cooperate to install a special CaptureProxy object.  For an example of
 a full Capturer subclass, check out StdStreamCapturer, contained
-within this module:
+within this module::
 
     class StdStreamCapturer(Capturer):
         def init(self):
