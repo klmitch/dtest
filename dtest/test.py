@@ -1043,6 +1043,8 @@ def dot(grname='testdeps'):
 
         # Make the node
         opts = dict(label=r'%s\n%r' % (dt, test))
+        if dt.state:
+            opts['label'] += r'\n(Result: %s)' % dt.state
         if (dt.state == FAIL or dt.state == XFAIL or dt.state == ERROR or
             dt.state == DEPFAIL):
             opts['color'] = 'red'
