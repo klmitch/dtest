@@ -491,21 +491,42 @@ def explore(directory=None):
     to running them.
     """
 
+    # Need the allowable suffixes
+    suffixes = [sfx[0] for sfx in imp.get_suffixes()]
+
     # Obtain the canonical directory name
     if directory is None:
         directory = os.getcwd()
     else:
         directory = os.path.abspath(directory)
 
+    # This is the directory we'll be searching
+    searchdir = directory
+
+    # But does it have an __init__.py?
+    pkgpath = None
+    for sfx in suffixes:
+        if os.path.exists(os.path.join(directory, '__init__' + sfx)):
+            # Refigure the directory
+            directory, pkgpath = os.path.split(directory)
+
     # Now, let's jigger the import path
     tmppath = sys.path
     sys.path = [directory] + sys.path
 
-    # Need the allowable suffixes
-    suffixes = [sfx[0] for sfx in imp.get_suffixes()]
+    # Import the package, if necessary
+    if pkgpath is not None:
+        try:
+            pkg = __import__(pkgpath)
+        except ImportError:
+            # Don't worry if we can't import it...
+            pass
+
+        # Visit this package
+        test.visit_mod(pkg)
 
     # Having done that, we now begin walking the directory tree
-    for root, dirs, files in os.walk(directory):
+    for root, dirs, files in os.walk(searchdir):
         # Let's determine the module's package path
         if root == directory:
             pkgpath = ''
