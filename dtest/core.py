@@ -64,8 +64,9 @@ class Queue(object):
     set).  Thread safety requires that accesses to the ``waiting``
     attribute be locked, so a Semaphore instance is stored in the
     ``waitlock`` parameter for this purpose.  Finally, the
-    ``th_count`` and ``th_max`` attributes maintain a count of
-    currently executing threads and the maximum thread count observed,
+    ``th_count``, ``th_simul``, and ``th_max`` attributes maintain a
+    count of currently executing threads, currently executing
+    simultaneous threads, and the maximum thread count observed,
     respectively, while ``th_event`` contains an Event instance which
     is signaled once it is determined that all tests have been run.
     """
@@ -85,10 +86,6 @@ class Queue(object):
         may find the DTestBase.istest() method useful for
         differentiating between regular tests and test fixtures for
         reporting purposes.
-
-        Note that the ``maxth`` restriction is implemented by having
-        the spawned thread wait on the Semaphore, and thus ``th_max``
-        may be greater than ``maxth``.
         """
 
         # Save output for future use
@@ -380,8 +377,8 @@ class DTestOutput(object):
             The total number of tests considered for execution.
 
         'threads'
-            The maximum number of threads which were utilized while
-            running tests.
+            The maximum number of simultaneously executing threads
+            which were utilized while running tests.
 
         Note that test fixtures are not included in these counts.  If a
         test fixture fails (raises an AssertionError) or raises any other
