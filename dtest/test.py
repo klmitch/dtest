@@ -396,16 +396,6 @@ class DTestBase(object):
         # Return True if this is a test
         return False
 
-    @classmethod
-    def tests(cls):
-        """
-        A class method that returns a list of all tests that have been
-        discovered by the framework.
-        """
-
-        # Return the list of all tests
-        return cls._tests.values()
-
     def _depcheck(self, output):
         """
         Performs a check of all this test's dependencies, to determine
@@ -1012,6 +1002,21 @@ class DTestCase(object):
     """
 
     __metaclass__ = DTestCaseMeta
+
+
+def tests(fixtures=False):
+    """
+    Retrieve the list of all tests (and, if ``fixtures`` is True, test
+    fixtures) that have been discovered and registered by the
+    framework.
+    """
+
+    # Save ourselves some work...
+    if fixtures:
+        return DTestBase._tests.values()
+
+    # OK, filter out the fixtures
+    return [dt for dt in DTestBase._tests.values() if dt.istest()]
 
 
 def dot(grname='testdeps'):

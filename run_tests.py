@@ -3,7 +3,6 @@
 import sys
 
 import dtest
-from dtest import test
 from dtest import util
 
 
@@ -63,9 +62,8 @@ else:
 
     # Print out the names of the tests
     print "Discovered tests:\n"
-    for dt in test.DTestBase.tests():
-        if dt.istest():
-            print str(dt)
+    for dt in dtest.tests():
+        print str(dt)
 
 # Are we to dump the dependency graph?
 if 'dotpath' in opts:
