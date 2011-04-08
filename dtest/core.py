@@ -104,14 +104,15 @@ class Queue(object):
         # When reporting is done, we need a list of all tests...
         self.tests = test.list_tests(True)
 
+        # Prepare all the tests for running--allocates a result
+        for dt in self.tests:
+            dt._prepare()
+
         # Generate a list of tests; skip() returns True to cause a
         # test to be skipped.  Default skip() tests the test's _skip
         # attribute.
         waiting = []
         for dt in self.tests:
-            # Prepare the test--allocates a result
-            dt._prepare()
-
             # Do we skip this one?
             if skip(dt):
                 dt._skipped(self.output)
