@@ -367,6 +367,29 @@ class DTestBase(object):
         # like an attribute
         return frozenset(self._revdeps)
 
+    @property
+    def raises(self):
+        """
+        Retrieve the set of exceptions this test is expected to raise.
+        Will be empty unless the @raises() decorator has been used on
+        this test.  This returns a frozenset.
+        """
+
+        # We want the exceptions to be read-only, but to be accessed
+        # like an attribute
+        return frozenset(self._raises)
+
+    @property
+    def timeout(self):
+        """
+        Retrieve the timeout for this test.  Will be None unless the
+        @timed() decorator has been used on this test.
+        """
+
+        # We want the timeout to be read-only, but to be accessed like
+        # an attribute
+        return self._timeout
+
     def setUp(self, pre):
         """
         Explicitly set the setUp() function or method to be called
