@@ -58,11 +58,22 @@ class DTestBase(object):
     :skip:
         True if the @skip decorator has been used on the test.
 
+    :failing:
+        True if the @failing decorator has been used on the test.
+
     :dependencies:
         The tests this test is dependent on.
 
     :dependents:
         The tests that are dependent on this test.
+
+    :raises:
+        The set of exceptions this test can raise; declared using the
+        @raises() decorator.
+
+    :timeout:
+        The timeout set for this test; declared using the @timed()
+        decorator.
 
     In addition, the setUp() and tearDown() methods are available to
     identify special set up and tear down functions or methods to
@@ -702,8 +713,9 @@ def attr(**kwargs):
     are converted to attributes on the test.  Note that all attributes
     beginning with underscore ("_") and the following list of
     attributes are reserved: ``result``, ``state``, ``test``,
-    ``class_``, ``skip``, ``dependencies``, ``dependents``, ``setUp``,
-    ``tearDown``, ``istest``, and ``tests``.
+    ``class_``, ``skip``, ``failing``, ``dependencies``,
+    ``dependents``, ``raises``, ``timeout``, ``setUp``, ``tearDown``,
+    and ``istest``.
     """
 
     # Need a wrapper to perform the actual decoration
