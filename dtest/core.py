@@ -555,7 +555,8 @@ def explore(directory=None):
 
             # Let's try to import it
             try:
-                mod = __import__(fullmodname)
+                __import__(fullmodname)
+                mod = sys.modules[fullmodname]
             except ImportError:
                 # Can't import it, so move on
                 continue
@@ -586,7 +587,8 @@ def explore(directory=None):
 
             # Let's try to import it
             try:
-                pkg = __import__(fullpkgname)
+                __import__(fullpkgname)
+                pkg = sys.modules[fullpkgname]
             except ImportError:
                 # Can't import it, no point exploring under it
                 continue
