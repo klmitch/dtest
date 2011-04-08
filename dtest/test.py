@@ -705,6 +705,9 @@ def depends(*deps):
     names.
     """
 
+    # Get the DTest objects for the dependencies
+    deps = [DTest(dep) for dep in deps]
+
     # Need a wrapper to perform the actual decoration
     def wrapper(func):
         # Get the DTest object for the test
