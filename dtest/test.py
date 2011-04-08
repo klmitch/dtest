@@ -363,7 +363,7 @@ class DTestBase(object):
         This returns a frozenset.
         """
 
-        # We want the depedenents to be read-only, but to be accessed
+        # We want the depedents to be read-only, but to be accessed
         # like an attribute
         return frozenset(self._revdeps)
 
