@@ -111,7 +111,19 @@ class Queue(object):
         waiting = []
         for dt in self.tests:
             # Do we skip this one?
-            if skip(dt):
+            willskip = skip(dt)
+
+            # Check if it's a fixture with no dependencies
+            if not willskip and isinstance(dt, test.DTestFixture):
+                if dt._partner is None:
+                    if len(dt._revdeps) == 0:
+                        willskip = True
+                else:
+                    if len(dt._revdeps) == 1:
+                        willskip = True
+
+            # OK, mark it skipped if we're skipping
+            if willskip:
                 dt._skipped(self.output)
             else:
                 waiting.append(dt)
