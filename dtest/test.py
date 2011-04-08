@@ -334,6 +334,18 @@ class DTestBase(object):
         return self._skip
 
     @property
+    def failing(self):
+        """
+        Retrieve the ``failing`` setting for the test.  This will be
+        True only if the @failing decorator has been used on the test;
+        otherwise, it will be False.
+        """
+
+        # We want the test's expected failure setting to be read-only,
+        # but to be accessed like an attribute
+        return self._exp_fail
+
+    @property
     def dependencies(self):
         """
         Retrieve the set of tests this test is dependent on.  This
