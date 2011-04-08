@@ -1032,10 +1032,33 @@ class DTestCaseMeta(type):
         # Check for class-level set up
         setUpClass = None
         if (SETUP + CLASS) in dict_:
-            setUpClass = DTestFixture(dict_[SETUP + CLASS])
+            setUpClass = DTestFixture(dict_[SETUP + CLASS],
+                                      _func_name(dict_[SETUP + CLASS], name))
             updates[SETUP + CLASS] = setUpClass
+        else:
+            for cls in bases:
+                # If it has a setUpClass, use it
+                if hasattr(cls, SETUP + CLASS):
+                    setUpClass = getattr(cls, SETUP + CLASS)
 
-            # Set up dependencies
+                    # If it's a DTestBase, unwrap it
+                    if isinstance(setUpClass, DTestBase):
+                        setUpClass = setUpClass._test
+                    elif (not callable(setUpClass) and
+                          not isinstance(setUpClass, classmethod) and
+                          not isinstance(setUpClass, staticmethod)):
+                        # Don't use it
+                        setUpClass = None
+                        break
+
+                    # OK, we have to wrap it in a DTestFixture
+                    setUpClass = DTestFixture(setUpClass,
+                                              _func_name(setUpClass, name))
+                    updates[SETUP + CLASS] = setUpClass
+                    break
+
+        # Set up dependencies
+        if setUpClass is not None:
             if setUps:
                 depends(setUps[-1])(setUpClass)
             setUps.append(setUpClass)
@@ -1043,10 +1066,35 @@ class DTestCaseMeta(type):
         # Check for class-level tear down
         tearDownClass = None
         if (TEARDOWN + CLASS) in dict_:
-            tearDownClass = DTestFixture(dict_[TEARDOWN + CLASS])
+            tearDownClass = DTestFixture(dict_[TEARDOWN + CLASS],
+                                         _func_name(dict_[TEARDOWN + CLASS],
+                                                    name))
             updates[TEARDOWN + CLASS] = tearDownClass
+        else:
+            for cls in bases:
+                # If it has a tearDownClass, use it
+                if hasattr(cls, TEARDOWN + CLASS):
+                    tearDownClass = getattr(cls, TEARDOWN + CLASS)
 
-            # Set up dependencies
+                    # If it's a DTestBase, unwrap it
+                    if isinstance(tearDownClass, DTestBase):
+                        tearDownClass = tearDownClass._test
+                    elif (not callable(tearDownClass) and
+                          not isinstance(tearDownClass, classmethod) and
+                          not isinstance(tearDownClass, staticmethod)):
+                        # Don't use it
+                        tearDownClass = None
+                        break
+
+                    # OK, we have to wrap it in a DTestFixture
+                    tearDownClass = DTestFixture(tearDownClass,
+                                                 _func_name(tearDownClass,
+                                                            name))
+                    updates[TEARDOWN + CLASS] = tearDownClass
+                    break
+
+        # Set up dependencies
+        if tearDownClass is not None:
             if tearDowns:
                 depends(tearDownClass)(tearDowns[-1])
             tearDownClass._set_partner(setUpClass)
