@@ -8,7 +8,7 @@ setup(
     author_email="kevin.mitchell@rackspace.com",
     url="",
     scripts=['bin/run-dtests'],
-    packages=['dtest',],
+    packages=['dtest'],
     license="",
     long_description=open('README.txt').read(),
     requires=['eventlet'],

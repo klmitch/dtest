@@ -8,6 +8,7 @@ raised by the framework when an error is encountered while executing
 functions or methods of the framework itself.
 """
 
+
 class DTestException(Exception):
     """
     DTestException
