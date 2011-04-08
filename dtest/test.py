@@ -629,7 +629,7 @@ class DTestFixture(DTestBase):
         # down fixtures need to run any time the corresponding set up
         # fixtures have run
         for dep in self._deps:
-            if dep != self._partner and dep.state != SKIPPED:
+            if dep is not self._partner and dep.state != SKIPPED:
                 return
 
         # Call the superclass method
