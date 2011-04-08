@@ -949,6 +949,26 @@ class DTestCaseMeta(type):
         setUp = dict_.get(SETUP, None)
         tearDown = dict_.get(TEARDOWN, None)
 
+        # May also have to search our bases
+        if setUp is None:
+            for cls in bases:
+                if hasattr(cls, SETUP):
+                    setUp = getattr(cls, SETUP)
+
+                    # Make sure it's a callable
+                    if not callable(setUp):
+                        setUp = None
+                        break
+        if tearDown is None:
+            for cls in bases:
+                if hasattr(cls, TEARDOWN):
+                    tearDown = getattr(cls, TEARDOWN)
+
+                    # Make sure it's a callable
+                    if not callable(tearDown):
+                        tearDown = None
+                        break
+
         # Check for package- and module-level fixtures
         setUps, tearDowns = _mod_fixtures(dict_['__module__'])
 
