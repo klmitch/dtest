@@ -62,7 +62,7 @@ else:
 
     # Print out the names of the tests
     print "Discovered tests:\n"
-    for dt in dtest.tests():
+    for dt in dtest.list_tests():
         print str(dt)
 
 # Are we to dump the dependency graph?

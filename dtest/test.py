@@ -1004,7 +1004,7 @@ class DTestCase(object):
     __metaclass__ = DTestCaseMeta
 
 
-def tests(fixtures=False):
+def list_tests(fixtures=False):
     """
     Retrieve the list of all tests (and, if ``fixtures`` is True, test
     fixtures) that have been discovered and registered by the

@@ -102,7 +102,7 @@ class Queue(object):
             self.sem = Semaphore(maxth)
 
         # When reporting is done, we need a list of all tests...
-        self.tests = test.tests(True)
+        self.tests = test.list_tests(True)
 
         # Generate a list of tests; skip() returns True to cause a
         # test to be skipped.  Default skip() tests the test's _skip
@@ -630,7 +630,7 @@ def main(directory=None, maxth=None, skip=lambda dt: dt.skip,
 
         # Print out the names of the tests
         print "Discovered tests:\n"
-        for dt in test.tests():
+        for dt in test.list_tests():
             print str(dt)
 
     # Are we to dump the dependency graph?
