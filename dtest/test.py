@@ -27,6 +27,27 @@ TEARDOWN = 'tearDown'
 CLASS = 'Class'
 
 
+def _func_name(func, cls=None):
+    """
+    Generates a string representation of the fully-qualified name of
+    ``func``.
+    """
+
+    # Determine the actual function...
+    if not callable(func):
+        func = func.__func__
+
+    # Don't include the class name if cls is None
+    if cls is None:
+        return '.'.join([func.__module__, func.__name__])
+
+    # Is cls a string?
+    if not isinstance(cls, basestring):
+        cls = cls.__name__
+
+    return '.'.join([func.__module__, cls, func.__name__])
+
+
 class DTestBase(object):
     """
     DTestBase
@@ -86,7 +107,7 @@ class DTestBase(object):
 
     _tests = {}
 
-    def __new__(cls, test):
+    def __new__(cls, test, key=None):
         """
         Look up or allocate a DTestBase instance wrapping ``test``.
         """
@@ -104,12 +125,17 @@ class DTestBase(object):
             not isinstance(test, staticmethod)):
             raise exceptions.DTestException("%r must be a callable" % test)
 
+        # Generate the key, if necessary
+        if key is None:
+            key = _func_name(test)
+
         # Make sure we haven't already created one
-        if test in DTestBase._tests:
-            return DTestBase._tests[test]
+        if key in DTestBase._tests:
+            return DTestBase._tests[key]
 
         # OK, construct a new one
         dt = super(DTestBase, cls).__new__(cls)
+        dt._key = key
         dt._test = test
         dt._class = None
         dt._exp_fail = False
@@ -125,7 +151,7 @@ class DTestBase(object):
         dt._result = None
 
         # Save it in the cache
-        DTestBase._tests[test] = dt
+        DTestBase._tests[key] = dt
 
         # And return it
         return dt
@@ -235,8 +261,8 @@ class DTestBase(object):
         of DTestBase to be stored in a set or used as hash keys.
         """
 
-        # Return the hash of the backing test
-        return hash(self._test)
+        # Return the hash of the key
+        return hash(self._key)
 
     def __eq__(self, other):
         """
@@ -246,7 +272,7 @@ class DTestBase(object):
         """
 
         # Compare test objects
-        return self._test is other._test
+        return self._key == other._key
 
     def __ne__(self, other):
         """
@@ -255,7 +281,7 @@ class DTestBase(object):
         """
 
         # Compare test objects
-        return self._test is not other._test
+        return self._key != other._key
 
     def __str__(self):
         """
@@ -264,15 +290,7 @@ class DTestBase(object):
         function or method.
         """
 
-        # Generate a string name for the test
-        test = self._test if callable(self._test) else self._test.__func__
-
-        # Include the class name if applicable
-        if self._class is None:
-            return '.'.join([test.__module__, test.__name__])
-        else:
-            return '.'.join([test.__module__, self._class.__name__,
-                             test.__name__])
+        return self._key
 
     def __repr__(self):
         """
@@ -441,6 +459,42 @@ class DTestBase(object):
 
         # Return True if this is a test
         return False
+
+    def _attach(self, cls):
+        """
+        Attach a class to the test.  This may re-key the test.
+        """
+
+        # Set the class
+        self._class = cls
+
+        # Generate the new key and see if it matches...
+        newkey = _func_name(self._test, cls)
+        if newkey != self._key:
+            # We've been rekeyed!  Remove ourself from the cache...
+            del self.__class__._tests[self._key]
+
+            # ...from all our dependencies...
+            for dep in self._deps:
+                dep._revdeps.remove(self)
+
+            # ...and from all our dependents
+            for dep in self._revdeps:
+                dep._deps.remove(self)
+
+            # Re-key ourself
+            self._key = newkey
+
+            # Add back to the cache...
+            self.__class__._tests[newkey] = self
+
+            # ...to all our dependencies...
+            for dep in self._deps:
+                dep._revdeps.add(self)
+
+            # ...and to all our dependents
+            for dep in self._revdeps:
+                dep._deps.add(self)
 
     def _depcheck(self, output):
         """
@@ -1045,13 +1099,13 @@ class DTestCaseMeta(type):
 
         # Attach cls to all the tests
         for t in tests:
-            t._class = cls
+            t._attach(cls)
 
         # Attach cls to in-class fixtures
         if setUpClass is not None:
-            setUpClass._class = cls
+            setUpClass._attach(cls)
         if tearDownClass is not None:
-            tearDownClass._class = cls
+            tearDownClass._attach(cls)
 
         # Return the constructed class
         return cls
