@@ -1012,7 +1012,7 @@ class DTestCaseMeta(type):
                     # Make sure it's a callable
                     if not callable(setUp):
                         setUp = None
-                        break
+                    break
         if tearDown is None:
             for cls in bases:
                 if hasattr(cls, TEARDOWN):
@@ -1021,7 +1021,7 @@ class DTestCaseMeta(type):
                     # Make sure it's a callable
                     if not callable(tearDown):
                         tearDown = None
-                        break
+                    break
 
         # Check for package- and module-level fixtures
         setUps, tearDowns = _mod_fixtures(dict_['__module__'])
