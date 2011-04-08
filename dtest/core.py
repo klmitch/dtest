@@ -128,6 +128,7 @@ class Queue(object):
         # last thread exits
         self.th_count = 0
         self.th_event = Event()
+        self.th_simul = 0
         self.th_max = 0
 
     def spawn(self, tests):
@@ -158,8 +159,6 @@ class Queue(object):
 
                     # Spawn the test
                     self.th_count += 1
-                    if self.th_count > self.th_max:
-                        self.th_max = self.th_count
                     spawn_n(self.run_test, test)
 
                 # Dependencies failed; check if state changed and add
@@ -206,6 +205,11 @@ class Queue(object):
         if self.sem is not None:
             self.sem.acquire()
 
+        # Increment the simultaneous count
+        self.th_simul += 1
+        if self.th_simul > self.th_max:
+            self.th_max = self.th_simul
+
         # Set up arguments for the test
         args = []
         if test.class_ is not None:
@@ -223,6 +227,7 @@ class Queue(object):
             self.sem.release()
 
         # Decrement the thread count
+        self.th_simul -= 1
         self.th_count -= 1
 
         # If thread count is now 0, signal the event
