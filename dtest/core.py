@@ -537,7 +537,9 @@ def explore(directory=None):
             # Don't worry if we can't import it...
             pass
 
-        # Visit this package
+        # Force a revisit of this package
+        if hasattr(pkg, '_dt_visited'):
+            del pkg._dt_visited
         test.visit_mod(pkg)
 
     # Having done that, we now begin walking the directory tree
@@ -576,7 +578,10 @@ def explore(directory=None):
                 # Can't import it, so move on
                 continue
 
-            # OK, let's visit the module to discover all tests
+            # OK, let's force a revisit of the module to discover all
+            # tests
+            if hasattr(mod, '_dt_visited'):
+                del mod._dt_visited
             test.visit_mod(mod)
 
         # Now we want to determine which subdirectories are packages;
@@ -608,7 +613,9 @@ def explore(directory=None):
                 # Can't import it, no point exploring under it
                 continue
 
-            # Let's visit the package
+            # Let's force a revisit of the package
+            if hasattr(pkg, '_dt_visited'):
+                del pkg._dt_visited
             test.visit_mod(pkg)
 
             # We also want to explore under it
