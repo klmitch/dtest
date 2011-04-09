@@ -2,6 +2,11 @@ from dtest import *
 from dtest.util import *
 
 
+class TestThrowaway(DTestCase):
+    def test_fordep(self):
+        pass
+
+
 @skip
 def test_skip():
     pass
@@ -17,7 +22,7 @@ def test_attr():
     pass
 
 
-@depends(test_skip, test_failing, test_attr)
+@depends(test_skip, test_failing, test_attr, TestThrowaway.test_fordep)
 def test_depends():
     pass
 
@@ -66,12 +71,14 @@ class TestDecorators(DTestCase):
         assert_in(test_skip, test_depends.dependencies)
         assert_in(test_failing, test_depends.dependencies)
         assert_in(test_attr, test_depends.dependencies)
+        assert_in(TestThrowaway.test_fordep, test_depends.dependencies)
 
         # Part 2: Verify that test_depends() is in the depedents set
         # of test_skip(), test_failing(), and test_attr()
         assert_in(test_depends, test_skip.dependents)
         assert_in(test_depends, test_failing.dependents)
         assert_in(test_depends, test_attr.dependents)
+        assert_in(test_depends, TestThrowaway.test_fordep.dependents)
 
     @istest
     def raises(self):
