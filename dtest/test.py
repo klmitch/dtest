@@ -1079,6 +1079,7 @@ class DTestCaseMeta(type):
                     if isinstance(setUpClass, DTestBase):
                         setUpClass = setUpClass._test
                     elif (not callable(setUpClass) and
+                          not isinstance(setUpClass, types.MethodType) and
                           not isinstance(setUpClass, classmethod) and
                           not isinstance(setUpClass, staticmethod)):
                         # Don't use it
@@ -1114,6 +1115,7 @@ class DTestCaseMeta(type):
                     if isinstance(tearDownClass, DTestBase):
                         tearDownClass = tearDownClass._test
                     elif (not callable(tearDownClass) and
+                          not isinstance(tearDownClass, types.MethodType) and
                           not isinstance(tearDownClass, classmethod) and
                           not isinstance(tearDownClass, staticmethod)):
                         # Don't use it
