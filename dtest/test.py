@@ -16,6 +16,7 @@ utility function dot().
 
 import re
 import sys
+import types
 
 from dtest.constants import *
 from dtest import exceptions
@@ -120,6 +121,10 @@ class DTestBase(object):
         if isinstance(test, DTestBase):
             return test
 
+        # We have to unwrap MethodType
+        if isinstance(test, types.MethodType):
+            test = test.__func__
+
         # Require it to be a callable...
         if (not callable(test) and not isinstance(test, classmethod) and
             not isinstance(test, staticmethod)):
@@ -155,6 +160,19 @@ class DTestBase(object):
 
         # And return it
         return dt
+
+    def __get__(self, instance, owner):
+        """
+        Retrieve an instance method wrapping ourself, for use with
+        super() and inheritance.
+        """
+
+        # If instance is None, just return ourself directly
+        if instance is None:
+            return self
+
+        # OK, wrap ourself in an instance method
+        return types.MethodType(self, instance, owner)
 
     def __getattr__(self, key):
         """

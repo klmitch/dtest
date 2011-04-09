@@ -39,4 +39,4 @@ class TestInheritance(TestInheritanceBase):
 class TestInheritanceTwo(TestInheritance):
     def test_inheritance(self):
         # Make sure we can call our superclass method
-        super(TestInheritanceTwo, self).test_inheritance(self)
+        super(TestInheritanceTwo, self).test_inheritance()
