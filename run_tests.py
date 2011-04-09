@@ -47,7 +47,7 @@ dtest.depends(sys.modules['tests'].tearDown)(test_ordering)
 # Implement the rest of dtest.main()
 if not opts.get('dryrun', False):
     # Select the subset of options required
-    subopts = {'skip': lambda dt: False}
+    subopts = {'skip': lambda dt: hasattr(dt, 'must_skip') and dt.must_skip}
     if 'maxth' in opts:
         subopts['maxth'] = opts['maxth']
     if 'output' in opts:

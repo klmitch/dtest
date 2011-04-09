@@ -226,7 +226,7 @@ class Queue(object):
             args.append(test.class_())
 
         # Execute the test
-        test(*args, _output=self.output)
+        test._run(*args, _output=self.output)
 
         # Now, walk through its dependents and check readiness
         self.spawn(test.dependents)

@@ -26,9 +26,17 @@ class TestInheritanceBase(DTestCase):
 
 # See if we inherited them
 class TestInheritance(TestInheritanceBase):
+    @attr(must_skip=True)
     def test_inheritance(self):
         assert_true(self.__class__.class_setup)
         assert_true(self.instance_setup)
 
         self.__class__.class_setup = False
         self.instance_setup = False
+
+
+# Let's really stress things out, here...
+class TestInheritanceTwo(TestInheritance):
+    def test_inheritance(self):
+        # Make sure we can call our superclass method
+        super(TestInheritanceTwo, self).test_inheritance(self)

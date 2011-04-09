@@ -193,56 +193,19 @@ class DTestBase(object):
 
     def __call__(self, *args, **kwargs):
         """
-        Perform the test.  Causes any fixtures discovered as part of
-        the class or explicitly set (or overridden) by the setUp() and
-        tearDown() methods to be executed before and after the actual
-        test, respectively.  Returns the result of the test.  Note
-        that the ``_output`` keyword argument is extracted and used to
-        call a notify() method; see the run_tests() function for more
-        details.
+        Call the test function directly.
         """
 
-        # Need a helper to unwrap and call class methods and static
-        # methods
-        def do_call(method, args, kwargs):
-            if not callable(method):
-                # Have to unwrap it
-                method = method.__get__(args[0], args[0].__class__)
+        # May have to unwrap the test function
+        method = self._test
+        if not callable(method):
+            method = method.__get__(args[0], args[0].__class__)
 
-                # The first argument is now taken care of
-                args = args[1:]
+            # Consumed first argument...
+            args = args[1:]
 
-            # Now call it
-            return method(*args, **kwargs)
-
-        # Extract the notification
-        output = kwargs.get('_output')
-        if '_output' in kwargs:
-            del kwargs['_output']
-
-        # Transition to the running state
-        self._result._transition(RUNNING, output=output)
-
-        # Perform preliminary call
-        if self._pre is not None:
-            with self._result.accumulate(PRE):
-                do_call(self._pre, args, kwargs)
-
-        # Execute the test
-        with self._result.accumulate(TEST, self._raises):
-            do_call(self._test, args, kwargs)
-
-        # Invoke any clean-up that's necessary (regardless of
-        # exceptions)
-        if self._post is not None:
-            with self._result.accumulate(POST):
-                do_call(self._post, args, kwargs)
-
-        # Transition to the appropriate ending state
-        self._result._transition(output=output)
-
-        # Return the result
-        return self._result
+        # Call it
+        return method(*args, **kwargs)
 
     def __int__(self):
         """
@@ -495,6 +458,59 @@ class DTestBase(object):
             # ...and to all our dependents
             for dep in self._revdeps:
                 dep._deps.add(self)
+
+    def _run(self, *args, **kwargs):
+        """
+        Perform the test.  Causes any fixtures discovered as part of
+        the class or explicitly set (or overridden) by the setUp() and
+        tearDown() methods to be executed before and after the actual
+        test, respectively.  Returns the result of the test.  Note
+        that the ``_output`` keyword argument is extracted and used to
+        call a notify() method; see the run_tests() function for more
+        details.
+        """
+
+        # Need a helper to unwrap and call class methods and static
+        # methods
+        def do_call(method, args, kwargs):
+            if not callable(method):
+                # Have to unwrap it
+                method = method.__get__(args[0], args[0].__class__)
+
+                # The first argument is now taken care of
+                args = args[1:]
+
+            # Now call it
+            return method(*args, **kwargs)
+
+        # Extract the notification
+        output = kwargs.get('_output')
+        if '_output' in kwargs:
+            del kwargs['_output']
+
+        # Transition to the running state
+        self._result._transition(RUNNING, output=output)
+
+        # Perform preliminary call
+        if self._pre is not None:
+            with self._result.accumulate(PRE):
+                do_call(self._pre, args, kwargs)
+
+        # Execute the test
+        with self._result.accumulate(TEST, self._raises):
+            do_call(self._test, args, kwargs)
+
+        # Invoke any clean-up that's necessary (regardless of
+        # exceptions)
+        if self._post is not None:
+            with self._result.accumulate(POST):
+                do_call(self._post, args, kwargs)
+
+        # Transition to the appropriate ending state
+        self._result._transition(output=output)
+
+        # Return the result
+        return self._result
 
     def _depcheck(self, output):
         """
