@@ -979,7 +979,8 @@ def visit_mod(mod):
         v = getattr(mod, k)
 
         # Skip non-callables
-        if not callable(v):
+        if (not isinstance(v, types.FunctionType) and
+            not isinstance(v, DTestBase)):
             continue
 
         # If it has the _dt_nottest attribute set to True, skip it
