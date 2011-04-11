@@ -473,6 +473,26 @@ class DTestOutput(object):
         print >>self.output, ("Please report the above errors to the "
                               "developers of the dtest framework.")
 
+    def imports(self, exc_list):
+        """
+        Called by main() if import errors were encountered while
+        discovering tests.  The ``exc_list`` argument is a list of
+        tuples containing three elements: the first element is the
+        full path to the file for which import was attempted; the
+        second element is the module path for which import was
+        attempted; and the third is a three-element tuple returned by
+        sys.exc_info().
+        """
+
+        # Emit import error data
+        print >>self.output, "The following import errors were encountered:"
+        for path, pkgname, (exc_type, exc_value, tb) in exc_list:
+            exc_hdr = ' %s (%s) ' % (os.path.relpath(path), pkgname)
+            tb = ''.join(traceback.format_exception(exc_type, exc_value, tb))
+            print >>self.output, exc_hdr.center(self.linewidth, '-')
+            print >>self.output, tb.rstrip()
+        print >>self.output, ('-' * self.linewidth) + "\n"
+
 
 def run(tests, maxth=None, skip=lambda dt: dt.skip, output=DTestOutput()):
     """
@@ -551,11 +571,19 @@ def explore(directory=None):
     for all modules matching the test regular expression and import
     them.  Each module imported will be further explored for tests.
     This function may be used to discover all registered tests prior
-    to running them.  Returns a set of all discovered tests.
+    to running them.  Returns a tuple; the first element is a set of
+    all discovered tests, and the second element is a list of tuples
+    containing information about all ImportError exceptions caught.
+    The elements of this exception information tuple are, in order, a
+    path, the module name, and a tuple of exception information as
+    returned by sys.exc_info().
     """
 
     # Set of all discovered tests
     tests = set()
+
+    # List of all import exceptions
+    caught = []
 
     # Need the allowable suffixes
     suffixes = [sfx[0] for sfx in imp.get_suffixes()]
@@ -583,12 +611,11 @@ def explore(directory=None):
     # Import the package, if necessary
     if pkgpath is not None:
         try:
-            pkg = __import__(pkgpath)
+            __import__(pkgpath)
+            test.visit_mod(sys.modules[pkgpath], tests)
         except ImportError:
-            # Don't worry if we can't import it...
-            pass
-
-        test.visit_mod(pkg, tests)
+            # Remember the exception we got
+            caught.append((searchdir, pkgpath, sys.exc_info()))
 
     # Having done that, we now begin walking the directory tree
     for root, dirs, files in os.walk(searchdir):
@@ -623,6 +650,10 @@ def explore(directory=None):
                 __import__(fullmodname)
                 mod = sys.modules[fullmodname]
             except ImportError:
+                # Remember the exception we got
+                caught.append((os.path.join(root, f), fullmodname,
+                               sys.exc_info()))
+
                 # Can't import it, so move on
                 continue
 
@@ -654,6 +685,10 @@ def explore(directory=None):
                 __import__(fullpkgname)
                 pkg = sys.modules[fullpkgname]
             except ImportError:
+                # Remember the exception we got
+                caught.append((os.path.join(root, d), fullpkgname,
+                               sys.exc_info()))
+
                 # Can't import it, no point exploring under it
                 continue
 
@@ -670,7 +705,7 @@ def explore(directory=None):
     sys.path = tmppath
 
     # Return the tests
-    return tests
+    return tests, caught
 
 
 def main(directory=None, maxth=None, skip=lambda dt: dt.skip,
@@ -685,7 +720,11 @@ def main(directory=None, maxth=None, skip=lambda dt: dt.skip,
     """
 
     # First, discover the tests of interest
-    tests = explore(directory)
+    tests, caught = explore(directory)
+
+    # If there were import errors, report them
+    if caught:
+        output.imports(caught)
 
     # Is this a dry run?
     if not dryrun:

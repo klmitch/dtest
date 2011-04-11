@@ -102,7 +102,12 @@ if 'directory' not in opts:
     opts['directory'] = 'tests'
 
 # OK, we need to do the explore
-tests = dtest.explore(opts['directory'])
+tests, caught = dtest.explore(opts['directory'])
+
+# If there were import errors, report them
+if caught:
+    output = dtest.DTestOutput()
+    output.imports(caught)
 
 # Now, set up the dependency between tests.tearDown and our
 # test_ordering() test
