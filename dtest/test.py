@@ -43,27 +43,6 @@ TEARDOWN = 'tearDown'
 CLASS = 'Class'
 
 
-def _func_name(func, cls=None):
-    """
-    Generates a string representation of the fully-qualified name of
-    ``func``.
-    """
-
-    # Determine the actual function...
-    if not callable(func):
-        func = func.__func__
-
-    # Don't include the class name if cls is None
-    if cls is None:
-        return '.'.join([func.__module__, func.__name__])
-
-    # Is cls a string?
-    if not isinstance(cls, basestring):
-        cls = cls.__name__
-
-    return '.'.join([func.__module__, cls, func.__name__])
-
-
 class DTestBase(object):
     """
     DTestBase
@@ -121,77 +100,44 @@ class DTestBase(object):
     DTest class to return True.
     """
 
-    _tests = {}
-
-    def __new__(cls, test, key=None):
+    def __init__(self, test):
         """
-        Look up or allocate a DTestBase instance wrapping ``test``.
+        Initialize a DTestBase instance wrapping ``test``.
         """
 
-        # If test is None, return None
+        # The test cannot be None
         if test is None:
-            return None
+            raise exceptions.DTestException("None is an invalid test")
 
-        # If test is a DTestBase subclass, then return it directly
-        if isinstance(test, DTestBase):
-            return test
-
-        # We have to unwrap MethodType
-        if isinstance(test, types.MethodType):
+        # We have to unwrap MethodType and class and static methods
+        if (isinstance(test, types.MethodType) or
+            isinstance(test, classmethod) or isinstance(test, staticmethod)):
             test = test.__func__
 
         # Require it to be a callable...
-        if (not callable(test) and not isinstance(test, classmethod) and
-            not isinstance(test, staticmethod)):
+        if not callable(test):
             raise exceptions.DTestException("%r must be a callable" % test)
 
-        # Generate the key, if necessary
-        if key is None:
-            key = _func_name(test)
+        # Initialize ourself
+        self._name = None
+        self._test = test
+        self._class = None
+        self._exp_fail = False
+        self._skip = False
+        self._pre = None
+        self._post = None
+        self._deps = set()
+        self._revdeps = set()
+        self._partner = None
+        self._attrs = {}
+        self._raises = set()
+        self._timeout = None
+        self._result = None
 
-        # Make sure we haven't already created one
-        if key in DTestBase._tests:
-            return DTestBase._tests[key]
-
-        # OK, construct a new one
-        dt = super(DTestBase, cls).__new__(cls)
-        dt._key = key
-        dt._test = test
-        dt._class = None
-        dt._exp_fail = False
-        dt._skip = False
-        dt._pre = None
-        dt._post = None
-        dt._deps = set()
-        dt._revdeps = set()
-        dt._partner = None
-        dt._attrs = {}
-        dt._raises = set()
-        dt._timeout = None
-        dt._result = None
-
-        # Save it in the cache
-        DTestBase._tests[key] = dt
-
-        dt._test._dt_dtest = dt
-        dt._test.setUp = dt.setUp
-        dt._test.tearDown = dt.tearDown
-
-        # And return it
-        return dt
-
-    def __get__(self, instance, owner):
-        """
-        Retrieve an instance method wrapping ourself, for use with
-        super() and inheritance.
-        """
-
-        # If instance is None, just return ourself directly
-        if instance is None:
-            return self
-
-        # OK, wrap ourself in an instance method
-        return types.MethodType(self, instance, owner)
+        # Attach ourself to the test
+        test._dt_dtest = self
+        test.setUp = self.setUp
+        test.tearDown = self.tearDown
 
     def __getattr__(self, key):
         """
@@ -246,7 +192,7 @@ class DTestBase(object):
         """
 
         # Return the hash of the key
-        return hash(self._key)
+        return hash(id(self))
 
     def __eq__(self, other):
         """
@@ -256,7 +202,7 @@ class DTestBase(object):
         """
 
         # Compare test objects
-        return self._key == other._key
+        return self is other
 
     def __ne__(self, other):
         """
@@ -265,7 +211,7 @@ class DTestBase(object):
         """
 
         # Compare test objects
-        return self._key != other._key
+        return self is not other
 
     def __str__(self):
         """
@@ -274,7 +220,20 @@ class DTestBase(object):
         function or method.
         """
 
-        return self._key
+        # If our name has not been generated, do so...
+        if self._name is None:
+            if self._class is None:
+                # No class is involved
+                self._name = '.'.join([self._test.__module__,
+                                       self._test.__name__])
+            else:
+                # Have to include the class name
+                self._name = '.'.join([self._test.__module__,
+                                       self._class.__name__,
+                                       self._test.__name__])
+
+        # Return the name
+        return self._name
 
     def __repr__(self):
         """
@@ -456,33 +415,8 @@ class DTestBase(object):
         # Set the class
         self._class = cls
 
-        # Generate the new key and see if it matches...
-        newkey = _func_name(self._test, cls)
-        if newkey != self._key:
-            # We've been rekeyed!  Remove ourself from the cache...
-            del self.__class__._tests[self._key]
-
-            # ...from all our dependencies...
-            for dep in self._deps:
-                dep._revdeps.remove(self)
-
-            # ...and from all our dependents
-            for dep in self._revdeps:
-                dep._deps.remove(self)
-
-            # Re-key ourself
-            self._key = newkey
-
-            # Add back to the cache...
-            self.__class__._tests[newkey] = self
-
-            # ...to all our dependencies...
-            for dep in self._deps:
-                dep._revdeps.add(self)
-
-            # ...and to all our dependents
-            for dep in self._revdeps:
-                dep._deps.add(self)
+        # Re-set our name
+        self._name = None
 
     def _run(self, *args, **kwargs):
         """
@@ -762,7 +696,7 @@ def _gettest(func, testcls=DTest):
         return func
 
     # Always return None if _dt_nottest is set
-    if hasattr(func, '_dt_nottest') and func._dt_nottest:
+    if func is None or (hasattr(func, '_dt_nottest') and func._dt_nottest):
         return None
 
     # Look up the test as a function attribute
