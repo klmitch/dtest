@@ -23,10 +23,10 @@ setup(
     description="Dependency-based Threaded Test Framework",
     author="Kevin L. Mitchell",
     author_email="kevin.mitchell@rackspace.com",
-    url="",
+    url="http://github.com/klmitch/dtest",
     scripts=['bin/run-dtests'],
     packages=['dtest'],
-    license="",
+    license="LICENSE.txt",
     long_description=open('README.txt').read(),
     requires=['eventlet'],
     classifiers=[
