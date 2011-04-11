@@ -21,25 +21,74 @@ import dtest
 from dtest import util
 
 
+exp_order = [
+    'tests.setUp',
+    'tests.ordering.setUp',
+    'tests.ordering.test_order.setUp',
+    'tests.ordering.test_order.OrderingTestCase.setUpClass',
+    'tests.ordering.test_order.OrderingTestCase.setUp',
+    'tests.ordering.test_order.OrderingTestCase.test1',
+    'tests.ordering.test_order.OrderingTestCase.tearDown',
+    'tests.ordering.test_order.OrderingTestCase.setUp',
+    'tests.ordering.test_order.OrderingTestCase.test2',
+    'tests.ordering.test_order.OrderingTestCase.tearDown',
+    'tests.ordering.test_order.OrderingTestCase.tearDownClass',
+    'tests.ordering.test_order.tearDown',
+    'tests.ordering.tearDown',
+    'tests.tearDown',
+    ]
+
+required = [
+    'tests.explore.a_test',
+    'tests.explore.test_discovered',
+    'tests.explore.test_pkg.a_test',
+    'tests.explore.test_pkg.test_discovered',
+    'tests.explore.pkg_impl.a_test',
+    'tests.explore.pkg_impl.test_discovered',
+    'tests.explore.pkg_impl.test_impl.a_test',
+    'tests.explore.pkg_impl.test_impl.test_discovered',
+    ]
+
+prohibited = [
+    'tests.explore.test_not',
+    'tests.explore.pkg.a_test',
+    'tests.explore.pkg.test_not',
+    'tests.explore.pkg.test_discovered',
+    'tests.explore.pkg.nottest.a_test',
+    'tests.explore.pkg.nottest.test_not',
+    'tests.explore.pkg.nottest.test_discovered',
+    'tests.explore.notpkg.a_test',
+    'tests.explore.notpkg.test_not',
+    'tests.explore.notpkg.test_discovered',
+    'tests.explore.test_pkg.test_not',
+    'tests.explore.test_notpkg.a_test',
+    'tests.explore.test_notpkg.test_not',
+    'tests.explore.test_notpkg.test_discovered',
+    'tests.explore.pkg_impl.test_not',
+    'tests.explore.pkg_impl.test_impl.test_not',
+    ]
+
+
+@dtest.istest
 def test_ordering():
     # Look up t_order and make sure it's right
     t_order = sys.modules['tests'].t_order
-    util.assert_list_equal(t_order, [
-            'tests.setUp',
-            'tests.ordering.setUp',
-            'tests.ordering.test_order.setUp',
-            'tests.ordering.test_order.OrderingTestCase.setUpClass',
-            'tests.ordering.test_order.OrderingTestCase.setUp',
-            'tests.ordering.test_order.OrderingTestCase.test1',
-            'tests.ordering.test_order.OrderingTestCase.tearDown',
-            'tests.ordering.test_order.OrderingTestCase.setUp',
-            'tests.ordering.test_order.OrderingTestCase.test2',
-            'tests.ordering.test_order.OrderingTestCase.tearDown',
-            'tests.ordering.test_order.OrderingTestCase.tearDownClass',
-            'tests.ordering.test_order.tearDown',
-            'tests.ordering.tearDown',
-            'tests.tearDown',
-            ])
+    util.assert_list_equal(t_order, exp_order)
+
+
+@dtest.istest
+def test_discovery():
+    # Get the list of test names
+    tnames = set([str(t) for t in tests])
+
+    # Now go through the required list and make sure all those tests
+    # are present
+    for t in required:
+        assert t in tnames, "Required test %r not discovered" % t
+
+    # And similarly for the prohibited list
+    for t in prohibited:
+        assert t not in tnames, "Prohibited test %r discovered" % t
 
 
 # Start by processing the command-line arguments
@@ -59,8 +108,9 @@ tests = dtest.explore(opts['directory'])
 # test_ordering() test
 dtest.depends(sys.modules['tests'].tearDown)(test_ordering)
 
-# Have to add test_ordering to tests
+# Have to add test_ordering() and test_discovery() to tests
 tests.add(test_ordering._dt_dtest)
+tests.add(test_discovery._dt_dtest)
 
 # Implement the rest of dtest.main()
 if not opts.get('dryrun', False):
