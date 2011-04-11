@@ -228,22 +228,6 @@ class DTestBase(object):
         # Delete from the _attrs map
         del self._attrs[key]
 
-    def __call__(self, *args, **kwargs):
-        """
-        Call the test function directly.
-        """
-
-        # May have to unwrap the test function
-        method = self._test
-        if not callable(method):
-            method = method.__get__(args[0], args[0].__class__)
-
-            # Consumed first argument...
-            args = args[1:]
-
-        # Call it
-        return method(*args, **kwargs)
-
     def __int__(self):
         """
         Returns the value of the instance in an integer context.
@@ -513,13 +497,11 @@ class DTestBase(object):
 
         # Need a helper to unwrap and call class methods and static
         # methods
-        def do_call(method, args, kwargs):
-            if not callable(method):
-                # Have to unwrap it
-                method = method.__get__(args[0], args[0].__class__)
-
-                # The first argument is now taken care of
-                args = args[1:]
+        def do_call(method, obj, args, kwargs):
+            # If obj is not None, extract the method with getattr(),
+            # so we use the right calling convention
+            if obj is not None:
+                method = getattr(obj, method.__name__)
 
             # Now call it
             return method(*args, **kwargs)
@@ -532,20 +514,25 @@ class DTestBase(object):
         # Transition to the running state
         self._result._transition(RUNNING, output=output)
 
+        # Set up an object for the call, if necessary
+        obj = None
+        if self._class is not None:
+            obj = self._class()
+
         # Perform preliminary call
         if self._pre is not None:
             with self._result.accumulate(PRE):
-                do_call(self._pre, args, kwargs)
+                do_call(self._pre, obj, args, kwargs)
 
         # Execute the test
         with self._result.accumulate(TEST, self._raises):
-            do_call(self._test, args, kwargs)
+            do_call(self._test, obj, args, kwargs)
 
         # Invoke any clean-up that's necessary (regardless of
         # exceptions)
         if self._post is not None:
             with self._result.accumulate(POST):
-                do_call(self._post, args, kwargs)
+                do_call(self._post, obj, args, kwargs)
 
         # Transition to the appropriate ending state
         self._result._transition(output=output)

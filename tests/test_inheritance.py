@@ -43,10 +43,10 @@ class TestInheritanceBase(DTestCase):
 class TestInheritance(TestInheritanceBase):
     @attr(must_skip=True)
     def test_inheritance(self):
-        assert_true(self.__class__.class_setup)
+        assert_true(self.class_setup)
         assert_true(self.instance_setup)
 
-        self.__class__.class_setup = False
+        TestInheritanceBase.class_setup = False
         self.instance_setup = False
 
 

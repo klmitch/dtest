@@ -234,14 +234,8 @@ class Queue(object):
         if self.th_simul > self.th_max:
             self.th_max = self.th_simul
 
-        # Set up arguments for the test
-        args = []
-        if test.class_ is not None:
-            # Need self
-            args.append(test.class_())
-
         # Execute the test
-        test._run(*args, _output=self.output)
+        test._run(_output=self.output)
 
         # Now, walk through its dependents and check readiness
         self.spawn(test.dependents)
