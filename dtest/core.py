@@ -155,6 +155,10 @@ class Queue(object):
         self.th_simul = 0
         self.th_max = 0
 
+        # Place to keep any exceptions we encountered within dtest
+        # while running a test
+        self.caught = []
+
     def spawn(self, tests):
         """
         Selects all ready tests from the set or list specified in
@@ -235,7 +239,14 @@ class Queue(object):
             self.th_max = self.th_simul
 
         # Execute the test
-        test._run(_output=self.output)
+        try:
+            test._run(_output=self.output)
+        except:
+            # Add the exception to the caught list
+            self.caught.append(sys.exc_info())
+
+            # Manually transition the test to the ERROR state
+            test._result._transition(ERROR)
 
         # Now, walk through its dependents and check readiness
         self.spawn(test.dependents)
@@ -438,6 +449,30 @@ class DTestOutput(object):
             print >>self.output, ("  %d tests failed (%s)" %
                                   (total, ', '.join(bd)))
 
+    def caught(self, exc_list):
+        """
+        Called after emitting summary data to report any exceptions
+        encountered within the dtest framework itself while running
+        the test.  The ``exc_list`` argument is a list of
+        three-element tuples.  For each tuple, the first element is an
+        exception type; the second element is the exception value; and
+        the third element is a traceback object.  Under most
+        circumstances, this function will not be called; if it is, the
+        exception data reported should be sent back to the dtest
+        framework developers.
+        """
+
+        # Emit exception data
+        print >>self.output, "\nThe following exceptions were encountered:"
+        for exc_type, exc_value, tb in exc_list:
+            exc_hdr = ' Exception %s ' % exc_type.__name__
+            tb = ''.join(traceback.format_exception(exc_type, exc_value, tb))
+            print >>self.output, exc_hdr.center(self.linewidth, '-')
+            print >>self.output, tb.rstrip()
+        print >>self.output, '-' * self.linewidth
+        print >>self.output, ("Please report the above errors to the "
+                              "developers of the dtest framework.")
+
 
 def run(tests, maxth=None, skip=lambda dt: dt.skip, output=DTestOutput()):
     """
@@ -498,6 +533,10 @@ def run(tests, maxth=None, skip=lambda dt: dt.skip, output=DTestOutput()):
 
     # Emit summary data
     output.summary(cnt)
+
+    # If we saw exceptions, emit data about them
+    if q.caught:
+        output.caught(q.caught)
 
     # Return False if there were any unexpected failures or errors
     if cnt[FAIL] > 0 or cnt[ERROR] > 0 or cnt[DEPFAIL] > 0:
