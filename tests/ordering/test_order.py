@@ -41,8 +41,8 @@ def tearDown():
 
 
 class OrderingTestCase(dtest.DTestCase):
-    @staticmethod
-    def setUpClass():
+    @classmethod
+    def setUpClass(cls):
         # Make sure we're the fourth thing to have run
         assert len(tests.t_order) == 3, "Ordering error running test suite"
         assert tests.t_order[-1] == 'tests.ordering.test_order.setUp', \
@@ -52,8 +52,8 @@ class OrderingTestCase(dtest.DTestCase):
         tests.t_order.append('tests.ordering.test_order.'
                              'OrderingTestCase.setUpClass')
 
-    @staticmethod
-    def tearDownClass():
+    @classmethod
+    def tearDownClass(cls):
         # Make sure we're the eleventh thing to have run
         assert len(tests.t_order) == 10, "Ordering error running test suite"
         assert tests.t_order[-1] == ('tests.ordering.test_order.'

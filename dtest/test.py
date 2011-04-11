@@ -173,6 +173,10 @@ class DTestBase(object):
         # Save it in the cache
         DTestBase._tests[key] = dt
 
+        dt._test._dt_dtest = dt
+        dt._test.setUp = dt.setUp
+        dt._test.tearDown = dt.tearDown
+
         # And return it
         return dt
 
@@ -460,6 +464,10 @@ class DTestBase(object):
         """
         Attach a class to the test.  This may re-key the test.
         """
+
+        # If a class is already associated, do nothing
+        if self._class is not None:
+            return
 
         # Set the class
         self._class = cls
@@ -755,6 +763,36 @@ class DTestFixture(DTestBase):
         super(DTestFixture, self)._skipped(output)
 
 
+def _gettest(func, testcls=DTest):
+    """
+    Retrieves a DTest from--or, if ``testcls`` is not None, attaches a
+    new test of that class to--``func``.  This is a helper function
+    used by the decorators below.
+    """
+
+    # We could be passed a DTest, so return it if so
+    if isinstance(func, DTestBase):
+        return func
+
+    # Always return None if _dt_nottest is set
+    if hasattr(func, '_dt_nottest') and func._dt_nottest:
+        return None
+
+    # Look up the test as a function attribute
+    try:
+        return func._dt_dtest
+    except AttributeError:
+        # Don't want to create one, I guess
+        if testcls is None:
+            return None
+
+        # Not yet declared, so let's go ahead and attach one
+        dt = testcls(func)
+
+        # Return the test
+        return dt
+
+
 def istest(func):
     """
     Decorates a function to indicate that the function is a test.  Can
@@ -763,8 +801,11 @@ def istest(func):
     regular expression.
     """
 
-    # Wrap func in a test
-    return DTest(func)
+    # Make sure func has a DTest associated with it
+    _gettest(func)
+
+    # Return the function
+    return func
 
 
 def nottest(func):
@@ -786,13 +827,13 @@ def skip(func):
     """
 
     # Get the DTest object for the test
-    dt = DTest(func)
+    dt = _gettest(func)
 
     # Set up to skip it
     dt._skip = True
 
-    # Return the test
-    return dt
+    # Return the function
+    return func
 
 
 def failing(func):
@@ -801,13 +842,13 @@ def failing(func):
     """
 
     # Get the DTest object for the test
-    dt = DTest(func)
+    dt = _gettest(func)
 
     # Set up to expect it to fail
     dt._exp_fail = True
 
-    # Return the test
-    return dt
+    # Return the function
+    return func
 
 
 def attr(**kwargs):
@@ -824,13 +865,13 @@ def attr(**kwargs):
     # Need a wrapper to perform the actual decoration
     def wrapper(func):
         # Get the DTest object for the test
-        dt = DTest(func)
+        dt = _gettest(func)
 
         # Update the attributes
         dt._attrs.update(kwargs)
 
-        # Return the test
-        return dt
+        # Return the function
+        return func
 
     # Return the actual decorator
     return wrapper
@@ -846,12 +887,12 @@ def depends(*deps):
     """
 
     # Get the DTest objects for the dependencies
-    deps = [DTest(dep) for dep in deps]
+    deps = [_gettest(dep) for dep in deps]
 
     # Need a wrapper to perform the actual decoration
     def wrapper(func):
         # Get the DTest object for the test
-        dt = DTest(func)
+        dt = _gettest(func)
 
         # Add the dependencies
         dt._deps |= set(deps)
@@ -860,8 +901,8 @@ def depends(*deps):
         for dep in deps:
             dep._revdeps.add(dt)
 
-        # Return the test
-        return dt
+        # Return the function
+        return func
 
     # Return the actual decorator
     return wrapper
@@ -878,13 +919,13 @@ def raises(*exc_types):
     # Need a wrapper to perform the actual decoration
     def wrapper(func):
         # Get the DTest object for the test
-        dt = DTest(func)
+        dt = _gettest(func)
 
         # Store the recognized exception types
         dt._raises |= set(exc_types)
 
-        # Return the test
-        return dt
+        # Return the function
+        return func
 
     # Return the actual decorator
     return wrapper
@@ -904,129 +945,140 @@ def timed(timeout):
     # Need a wrapper to perform the actual decoration
     def wrapper(func):
         # Get the DTest object for the test
-        dt = DTest(func)
+        dt = _gettest(func)
 
         # Store the timeout value (in seconds)
         dt._timeout = timeout
 
-        # Return the test
-        return dt
+        # Return the function
+        return func
 
     # Return the actual decorator
     return wrapper
 
 
-def _mod_fixtures(modname):
-    """
-    Helper function which searches a module's name heirarchy, based on
-    the textual ``modname``, to find all test fixtures that apply to
-    tests in that module.  Returns a tuple, where the first element is
-    a list of set up fixtures and the second element is a list of tear
-    down fixtures.
-    """
-
-    # Split up the module name
-    mods = modname.split('.')
-
-    # Now, walk up the tree
-    setUps = []
-    tearDowns = []
-    for i in range(len(mods)):
-        module = sys.modules['.'.join(mods[:i + 1])]
-
-        # Make sure the module's been visited...
-        visit_mod(module)
-
-        # Does the module have the fixture?
-        setUp = None
-        if hasattr(module, SETUP):
-            module.setUp = DTestFixture(module.setUp)
-            setUps.append(module.setUp)
-            setUp = module.setUp
-        if hasattr(module, TEARDOWN):
-            module.tearDown = DTestFixture(module.tearDown)
-            tearDowns.append(module.tearDown)
-
-            # Set the partner
-            module.tearDown._set_partner(setUp)
-
-    # Next, set up dependencies; each setUp() is dependent on all the
-    # ones before it...
-    for i in range(1, len(setUps)):
-        depends(setUps[i - 1])(setUps[i])
-
-    # While each tearDown() is dependent on all the ones after it...
-    for i in range(len(tearDowns) - 1):
-        depends(tearDowns[i + 1])(tearDowns[i])
-
-    # Return the setUps and tearDowns
-    return (setUps, tearDowns)
-
-
 testRE = re.compile(r'(?:^|[\b_\.-])[Tt]est')
 
 
-def visit_mod(mod):
+def visit_mod(mod, tests):
     """
     Helper function which searches a module object, specified by
-    ``mod``, for all tests and wraps discovered test fixtures in
-    instances of DTestFixture.  Also sets up proper dependency
-    information.  Called by _mod_fixtures().
+    ``mod``, for all tests, test classes, and test fixtures, then sets
+    up proper dependency information.  All discovered tests are added
+    to the set specified by ``tests``.  Returns a tuple containing the
+    closest discovered test fixtures (needed because visit_mod() is
+    recursive).
     """
 
-    # Have we visited the module before?
-    if hasattr(mod, '_dt_visited') and mod._dt_visited:
-        return
+    # Have we visited this module before?
+    if hasattr(mod, '_dt_visited'):
+        # We cache the tests in this module (and parent modules) in
+        # _dt_visited
+        tests |= mod._dt_visited
+        return mod._dt_setUp, mod._dt_tearDown
 
-    # Mark that we're visiting the module
-    mod._dt_visited = True
+    # OK, set up the visited cache
+    mod._dt_visited = set()
 
-    # Check for package- and module-level fixtures
-    setUps, tearDowns = _mod_fixtures(mod.__name__)
+    # If we have a parent package...
+    setUp = None
+    tearDown = None
+    if '.' in mod.__name__:
+        pkgname, modname = mod.__name__.rsplit('.', 1)
 
-    # Search the module for tests
-    updates = {}
+        # Visit up one level
+        setUp, tearDown = visit_mod(sys.modules[pkgname], mod._dt_visited)
+
+    # See if we have fixtures in this module
+    if hasattr(mod, SETUP):
+        setUpLocal = _gettest(getattr(mod, SETUP), DTestFixture)
+
+        # Set up the dependency
+        if setUp is not None:
+            depends(setUp)(setUpLocal)
+
+        setUp = setUpLocal
+    if hasattr(mod, TEARDOWN):
+        tearDownLocal = _gettest(getattr(mod, TEARDOWN), DTestFixture)
+
+        # Set up the dependency
+        if tearDown is not None:
+            depends(tearDownLocal)(tearDown)
+
+        tearDown = tearDownLocal
+
+    # OK, we now have the test fixtures; let's cache them
+    mod._dt_setUp = setUp
+    mod._dt_tearDown = tearDown
+
+    # Now, let's scan all the module attributes and set them up as
+    # tests with appropriate dependencies...
     for k in dir(mod):
-        # Skip internal functions
-        if k[0] == '_':
+        # Skip internal attributes and the fixtures
+        if k[0] == '_' or k == SETUP or k == TEARDOWN:
             continue
 
+        # Get the value
         v = getattr(mod, k)
 
         # Skip non-callables
-        if (not isinstance(v, types.FunctionType) and
-            not isinstance(v, DTestBase)):
+        if not callable(v):
             continue
 
-        # If it has the _dt_nottest attribute set to True, skip it
+        # Is it explicitly not a test?
         if hasattr(v, '_dt_nottest') and v._dt_nottest:
             continue
 
-        # If it's one of the test fixtures, skip it
-        if k in (SETUP, TEARDOWN):
+        # If it's a DTestCase, handle it specially
+        try:
+            if issubclass(v, DTestCase):
+                # Set up dependencies
+                if setUp is not None:
+                    if hasattr(v, SETUP + CLASS):
+                        # That's easy...
+                        depends(setUp)(getattr(v, SETUP + CLASS))
+                    else:
+                        # Set up a dependency for each test
+                        for t in v._dt_tests:
+                            depends(setUp)(t)
+                if tearDown is not None:
+                    if hasattr(v, TEARDOWN + CLASS):
+                        # That's easy...
+                        depends(getattr(v, TEARDOWN + CLASS))(tearDown)
+                    else:
+                        # Set up a dependency for each test
+                        for t in v._dt_tests:
+                            depends(t)(tearDown)
+
+                # Add all the tests
+                mod._dt_visited |= v._dt_tests
+
+            # Well, it's probably a class, so ignore it
+            continue
+        except TypeError:
+            # Guess it's not a class...
+            pass
+
+        # OK, let's try to get the test
+        dt = _gettest(v, DTest if testRE.match(k) else None)
+        if dt is None:
+            # Not a test
             continue
 
-        # Does it match the test RE?
-        if not isinstance(v, DTestBase) and not testRE.match(k):
-            continue
+        # Keep track of tests in this module
+        mod._dt_visited.add(dt)
 
-        # Is it already a test?
-        if not isinstance(v, DTestBase):
-            # Convert it
-            v = DTest(v)
+        # Set up the dependencies on setUp and tearDown
+        if setUp is not None:
+            depends(setUp)(dt)
+        if tearDown is not None:
+            depends(dt)(tearDown)
 
-            # Store an update for it
-            updates[k] = v
+    # Set up the list of tests
+    tests |= mod._dt_visited
 
-        # Attach fixtures as appropriate...
-        if setUps:
-            depends(setUps[-1])(v)
-        if tearDowns:
-            depends(v)(tearDowns[-1])
-
-    # Update the module
-    for k, v in updates.items():
-        setattr(mod, k, v)
+    # OK, let's return the fixtures for recursive calls
+    return setUp, tearDown
 
 
 class DTestCaseMeta(type):
@@ -1045,169 +1097,78 @@ class DTestCaseMeta(type):
         """
         Constructs a new class with the given ``name``, ``bases``, and
         ``dict_``.  The ``dict_`` is searched for all tests and
-        class-level test fixtures, and the module- and package-level
-        test fixtures are attached using dependencies.
+        class-level test fixtures.
         """
 
-        # Look up any test fixtures for the individual tests...
-        setUp = dict_.get(SETUP, None)
-        tearDown = dict_.get(TEARDOWN, None)
-
-        # May also have to search our bases
-        if setUp is None:
-            for cls in bases:
-                if hasattr(cls, SETUP):
-                    setUp = getattr(cls, SETUP)
-
-                    # Make sure it's a callable
-                    if not callable(setUp):
-                        setUp = None
-                    break
-        if tearDown is None:
-            for cls in bases:
-                if hasattr(cls, TEARDOWN):
-                    tearDown = getattr(cls, TEARDOWN)
-
-                    # Make sure it's a callable
-                    if not callable(tearDown):
-                        tearDown = None
-                    break
-
-        # Check for package- and module-level fixtures
-        setUps, tearDowns = _mod_fixtures(dict_['__module__'])
-
-        # Updates to the dict_ to apply later
-        updates = {}
-
-        # Check for class-level set up
-        setUpClass = None
-        if (SETUP + CLASS) in dict_:
-            setUpClass = DTestFixture(dict_[SETUP + CLASS],
-                                      _func_name(dict_[SETUP + CLASS], name))
-            updates[SETUP + CLASS] = setUpClass
-        else:
-            for cls in bases:
-                # If it has a setUpClass, use it
-                if hasattr(cls, SETUP + CLASS):
-                    setUpClass = getattr(cls, SETUP + CLASS)
-
-                    # If it's a DTestBase, unwrap it
-                    if isinstance(setUpClass, DTestBase):
-                        setUpClass = setUpClass._test
-                    elif (not callable(setUpClass) and
-                          not isinstance(setUpClass, types.MethodType) and
-                          not isinstance(setUpClass, classmethod) and
-                          not isinstance(setUpClass, staticmethod)):
-                        # Don't use it
-                        setUpClass = None
-                        break
-
-                    # OK, we have to wrap it in a DTestFixture
-                    setUpClass = DTestFixture(setUpClass,
-                                              _func_name(setUpClass, name))
-                    updates[SETUP + CLASS] = setUpClass
-                    break
-
-        # Set up dependencies
-        if setUpClass is not None:
-            if setUps:
-                depends(setUps[-1])(setUpClass)
-            setUps.append(setUpClass)
-
-        # Check for class-level tear down
-        tearDownClass = None
-        if (TEARDOWN + CLASS) in dict_:
-            tearDownClass = DTestFixture(dict_[TEARDOWN + CLASS],
-                                         _func_name(dict_[TEARDOWN + CLASS],
-                                                    name))
-            updates[TEARDOWN + CLASS] = tearDownClass
-        else:
-            for cls in bases:
-                # If it has a tearDownClass, use it
-                if hasattr(cls, TEARDOWN + CLASS):
-                    tearDownClass = getattr(cls, TEARDOWN + CLASS)
-
-                    # If it's a DTestBase, unwrap it
-                    if isinstance(tearDownClass, DTestBase):
-                        tearDownClass = tearDownClass._test
-                    elif (not callable(tearDownClass) and
-                          not isinstance(tearDownClass, types.MethodType) and
-                          not isinstance(tearDownClass, classmethod) and
-                          not isinstance(tearDownClass, staticmethod)):
-                        # Don't use it
-                        tearDownClass = None
-                        break
-
-                    # OK, we have to wrap it in a DTestFixture
-                    tearDownClass = DTestFixture(tearDownClass,
-                                                 _func_name(tearDownClass,
-                                                            name))
-                    updates[TEARDOWN + CLASS] = tearDownClass
-                    break
-
-        # Set up dependencies
-        if tearDownClass is not None:
-            if tearDowns:
-                depends(tearDownClass)(tearDowns[-1])
-            tearDownClass._set_partner(setUpClass)
-            tearDowns.append(tearDownClass)
-
-        # Now, we want to walk through dict_ and replace values that
-        # match the test RE with instances of DTest
-        tests = []
-        for k, v in dict_.items():
-            # If it has the _dt_nottest attribute set to True, skip it
-            if k[0] == '_' or (hasattr(v, '_dt_nottest') and v._dt_nottest):
-                continue
-
-            # If it's one of the test fixtures, skip it
-            if k in (SETUP, TEARDOWN, SETUP + CLASS, TEARDOWN + CLASS):
-                continue
-
-            # Does it match the test RE?
-            if not isinstance(v, DTestBase) and not testRE.match(k):
-                continue
-
-            # Is it already a test?
-            if not isinstance(v, DTestBase):
-                # Convert it
-                v = DTest(v)
-
-                # Store an update for it
-                updates[k] = v
-
-            # Remember test for attaching class later
-            tests.append(v)
-
-            # Attach fixtures as appropriate...
-            if v._pre is None and setUp is not None:
-                v.setUp(setUp)
-            if v._post is None and tearDown is not None:
-                v.tearDown(tearDown)
-
-            # Do package-, module-, and class-level fixtures as well
-            if setUps:
-                depends(setUps[-1])(v)
-            if tearDowns:
-                depends(v)(tearDowns[-1])
-
-        # Update the dict_
-        dict_.update(updates)
-
-        # Now that we've done the set-up, create the class
+        # We want to discover all tests, both here and in bases.  The
+        # easiest way of doing this is to begin by constructing the
+        # class...
         cls = super(DTestCaseMeta, mcs).__new__(mcs, name, bases, dict_)
 
-        # Attach cls to all the tests
-        for t in tests:
-            t._attach(cls)
+        # Look for the fixtures
+        setUp = getattr(cls, SETUP, None)
+        tearDown = getattr(cls, TEARDOWN, None)
+        setUpClass = _gettest(getattr(cls, SETUP + CLASS, None),
+                              DTestFixture)
+        tearDownClass = _gettest(getattr(cls, TEARDOWN + CLASS, None),
+                                 DTestFixture)
 
-        # Attach cls to in-class fixtures
+        # Attach the class to the fixtures
         if setUpClass is not None:
             setUpClass._attach(cls)
         if tearDownClass is not None:
             tearDownClass._attach(cls)
 
-        # Return the constructed class
+        # Now, let's scan all the class attributes and set them up as
+        # tests with appropriate dependencies...
+        tests = []
+        for k in dir(cls):
+            # Skip internal attributes and the fixtures
+            if (k[0] == '_' or k == SETUP or k == TEARDOWN or
+                k == SETUP + CLASS or k == TEARDOWN + CLASS):
+                continue
+
+            # Get the value
+            v = getattr(cls, k)
+
+            # Skip non-callables
+            if not callable(v):
+                continue
+
+            # Is it explicitly not a test?
+            if hasattr(v, '_dt_nottest') and v._dt_nottest:
+                continue
+
+            # OK, let's try to get the test
+            dt = _gettest(v, DTest if testRE.match(k) else None)
+            if dt is None:
+                # Not a test
+                continue
+
+            # Attach the class to the test
+            dt._attach(cls)
+
+            # Keep a list of the tests in this class
+            tests.append(dt)
+
+            # We now have a test; let's attach fixtures as
+            # appropriate...
+            if dt._pre is None and setUp is not None:
+                dt.setUp(setUp)
+            if dt._post is None and tearDown is not None:
+                dt.tearDown(tearDown)
+
+            # Also set up the dependencies on setUpClass and
+            # tearDownClass
+            if setUpClass is not None:
+                depends(setUpClass)(dt)
+            if tearDownClass is not None:
+                depends(dt)(tearDownClass)
+
+        # Save the list of tests
+        cls._dt_tests = set(tests)
+
+        # OK, let's return the constructed class
         return cls
 
 

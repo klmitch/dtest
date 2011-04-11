@@ -521,6 +521,9 @@ def explore(directory=None):
     to running them.
     """
 
+    # Set of all discovered tests
+    tests = set()
+
     # Need the allowable suffixes
     suffixes = [sfx[0] for sfx in imp.get_suffixes()]
 
@@ -552,10 +555,7 @@ def explore(directory=None):
             # Don't worry if we can't import it...
             pass
 
-        # Force a revisit of this package
-        if hasattr(pkg, '_dt_visited'):
-            del pkg._dt_visited
-        test.visit_mod(pkg)
+        test.visit_mod(pkg, tests)
 
     # Having done that, we now begin walking the directory tree
     for root, dirs, files in os.walk(searchdir):
@@ -593,11 +593,7 @@ def explore(directory=None):
                 # Can't import it, so move on
                 continue
 
-            # OK, let's force a revisit of the module to discover all
-            # tests
-            if hasattr(mod, '_dt_visited'):
-                del mod._dt_visited
-            test.visit_mod(mod)
+            test.visit_mod(mod, tests)
 
         # Now we want to determine which subdirectories are packages;
         # they'll contain __init__.py
@@ -628,10 +624,7 @@ def explore(directory=None):
                 # Can't import it, no point exploring under it
                 continue
 
-            # Let's force a revisit of the package
-            if hasattr(pkg, '_dt_visited'):
-                del pkg._dt_visited
-            test.visit_mod(pkg)
+            test.visit_mod(pkg, tests)
 
             # We also want to explore under it
             subdirs.append(d)
