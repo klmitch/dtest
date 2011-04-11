@@ -53,11 +53,14 @@ if 'directory' not in opts:
     opts['directory'] = 'tests'
 
 # OK, we need to do the explore
-dtest.explore(opts['directory'])
+tests = dtest.explore(opts['directory'])
 
 # Now, set up the dependency between tests.tearDown and our
 # test_ordering() test
 dtest.depends(sys.modules['tests'].tearDown)(test_ordering)
+
+# Have to add test_ordering to tests
+tests.add(test_ordering._dt_dtest)
 
 # Implement the rest of dtest.main()
 if not opts.get('dryrun', False):
@@ -69,19 +72,20 @@ if not opts.get('dryrun', False):
         subopts['output'] = opts['output']
 
     # Execute the tests
-    result = dtest.run(**subopts)
+    result = dtest.run(tests, **subopts)
 else:
     result = True
 
     # Print out the names of the tests
     print "Discovered tests:\n"
-    for dt in dtest.list_tests():
-        print str(dt)
+    for dt in tests:
+        if dt.istest():
+            print str(dt)
 
 # Are we to dump the dependency graph?
 if 'dotpath' in opts:
     with open(opts['dotpath'], 'w') as f:
-        print >>f, dtest.dot()
+        print >>f, dtest.dot(tests)
 
 # All done!
 sys.exit(result)

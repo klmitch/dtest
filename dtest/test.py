@@ -1011,6 +1011,12 @@ def visit_mod(mod, tests):
     mod._dt_setUp = setUp
     mod._dt_tearDown = tearDown
 
+    # Also add them to the set of discovered tests
+    if setUp is not None:
+        mod._dt_visited.add(setUp)
+    if tearDown is not None:
+        mod._dt_visited.add(tearDown)
+
     # Now, let's scan all the module attributes and set them up as
     # tests with appropriate dependencies...
     for k in dir(mod):
@@ -1168,6 +1174,12 @@ class DTestCaseMeta(type):
         # Save the list of tests
         cls._dt_tests = set(tests)
 
+        # Also need to list the fixtures
+        if setUpClass is not None:
+            cls._dt_tests.add(setUpClass)
+        if tearDownClass is not None:
+            cls._dt_tests.add(tearDownClass)
+
         # OK, let's return the constructed class
         return cls
 
@@ -1186,22 +1198,7 @@ class DTestCase(object):
     __metaclass__ = DTestCaseMeta
 
 
-def list_tests(fixtures=False):
-    """
-    Retrieve the list of all tests (and, if ``fixtures`` is True, test
-    fixtures) that have been discovered and registered by the
-    framework.
-    """
-
-    # Save ourselves some work...
-    if fixtures:
-        return DTestBase._tests.values()
-
-    # OK, filter out the fixtures
-    return [dt for dt in DTestBase._tests.values() if dt.istest()]
-
-
-def dot(grname='testdeps'):
+def dot(tests, grname='testdeps'):
     """
     Constructs a GraphViz-compatible dependency graph with the given
     name (``testdeps``, by default).  Returns the graph as a string.
@@ -1226,7 +1223,7 @@ def dot(grname='testdeps'):
     # Now, create the graph
     nodes = []
     edges = []
-    for dt in DTestBase._tests.values():
+    for dt in tests:
         # If it's not a callable, must be class or static method;
         # get the real test
         test = dt._test if callable(dt._test) else dt._test.__func__

@@ -60,7 +60,7 @@ from dtest.exceptions import DTestException
 from dtest.core import DTestOutput, run, explore, main, \
     optparser, opts_to_args
 from dtest.test import istest, nottest, skip, failing, attr, depends, \
-    raises, timed, DTestCase, list_tests, dot
+    raises, timed, DTestCase, dot
 
 __all__ = ['Capturer',
            'PRE', 'POST', 'TEST',
@@ -70,4 +70,4 @@ __all__ = ['Capturer',
            'DTestOutput', 'run', 'explore', 'main',
            'optparser', 'opts_to_args',
            'istest', 'nottest', 'skip', 'failing', 'attr', 'depends',
-           'raises', 'timed', 'DTestCase', 'list_tests', 'dot']
+           'raises', 'timed', 'DTestCase', 'dot']

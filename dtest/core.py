@@ -86,7 +86,7 @@ class Queue(object):
     is signaled once it is determined that all tests have been run.
     """
 
-    def __init__(self, maxth, skip, output):
+    def __init__(self, tests, maxth, skip, output):
         """
         Initialize a Queue.  The ``maxth`` argument must be either
         None or an integer specifying the maximum number of
@@ -114,7 +114,7 @@ class Queue(object):
             self.sem = Semaphore(maxth)
 
         # When reporting is done, we need a list of all tests...
-        self.tests = test.list_tests(True)
+        self.tests = tests
 
         # Prepare all the tests for running--allocates a result
         for dt in self.tests:
@@ -445,9 +445,9 @@ class DTestOutput(object):
                                   (total, ', '.join(bd)))
 
 
-def run(maxth=None, skip=lambda dt: dt.skip, output=DTestOutput()):
+def run(tests, maxth=None, skip=lambda dt: dt.skip, output=DTestOutput()):
     """
-    Run all defined tests.  The ``maxth`` argument, if an integer,
+    Run all ``tests``.  The ``maxth`` argument, if an integer,
     indicates the maximum number of simultaneously executing threads
     that may be used.  The ``skip`` argument specifies a function
     which, when passed a test, returns True to indicate that that test
@@ -466,7 +466,7 @@ def run(maxth=None, skip=lambda dt: dt.skip, output=DTestOutput()):
     monkey_patch()
 
     # Now, initialize the test queue...
-    q = Queue(maxth, skip, output)
+    q = Queue(tests, maxth, skip, output)
 
     # Install the capture proxies...
     capture.install()
@@ -518,7 +518,7 @@ def explore(directory=None):
     for all modules matching the test regular expression and import
     them.  Each module imported will be further explored for tests.
     This function may be used to discover all registered tests prior
-    to running them.
+    to running them.  Returns a set of all discovered tests.
     """
 
     # Set of all discovered tests
@@ -636,6 +636,9 @@ def explore(directory=None):
     # path
     sys.path = tmppath
 
+    # Return the tests
+    return tests
+
 
 def main(directory=None, maxth=None, skip=lambda dt: dt.skip,
          output=DTestOutput(), dryrun=False, dotpath=None):
@@ -649,24 +652,25 @@ def main(directory=None, maxth=None, skip=lambda dt: dt.skip,
     """
 
     # First, discover the tests of interest
-    explore(directory)
+    tests = explore(directory)
 
     # Is this a dry run?
     if not dryrun:
         # Nope, execute the tests
-        result = run(maxth=maxth, skip=skip, output=output)
+        result = run(tests, maxth=maxth, skip=skip, output=output)
     else:
         result = True
 
         # Print out the names of the tests
         print "Discovered tests:\n"
-        for dt in test.list_tests():
-            print str(dt)
+        for dt in tests:
+            if dt.istest():
+                print str(dt)
 
     # Are we to dump the dependency graph?
     if dotpath is not None:
         with open(dotpath, 'w') as f:
-            print >>f, test.dot()
+            print >>f, test.dot(tests)
 
     # Now, let's return the result of the test run
     return result
