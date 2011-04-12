@@ -79,7 +79,7 @@ def test_ordering():
 @dtest.istest
 def test_discovery():
     # Get the list of test names
-    tnames = set([str(t) for t in tests])
+    tnames = set([str(t) for t in queue.tests])
 
     # Now go through the required list and make sure all those tests
     # are present
@@ -115,13 +115,16 @@ opts = dtest.opts_to_args(options)
 if 'directory' not in opts:
     opts['directory'] = 'tests'
 
-# OK, we need to do the explore
-tests, caught = dtest.explore(opts['directory'])
+# Need to allocate a queue; select some suboptions for the task
+subopts = {'skip': lambda dt: hasattr(dt, 'must_skip') and dt.must_skip}
+if 'maxth' in opts:
+    subopts['maxth'] = opts['maxth']
+if 'output' in opts:
+    subopts['output'] = opts['output']
+queue = dtest.DTestQueue(**subopts)
 
-# If there were import errors, report them
-if caught:
-    output = dtest.DTestOutput()
-    output.imports(caught)
+# OK, we need to do the explore
+dtest.explore(opts['directory'], queue)
 
 # Now, set up the dependency between tests.tearDown and our
 # test_ordering() test and the test_partner_*() tests
@@ -130,35 +133,28 @@ dtest.depends(sys.modules['tests'].tearDown)(test_partner_setUp)
 dtest.depends(sys.modules['tests'].tearDown)(test_partner_tearDown)
 
 # Have to add local tests to tests set
-tests.add(test_ordering._dt_dtest)
-tests.add(test_discovery._dt_dtest)
-tests.add(test_partner_setUp._dt_dtest)
-tests.add(test_partner_tearDown._dt_dtest)
+queue.add_test(test_ordering)
+queue.add_test(test_discovery)
+queue.add_test(test_partner_setUp)
+queue.add_test(test_partner_tearDown)
 
 # Implement the rest of dtest.main()
 if not opts.get('dryrun', False):
-    # Select the subset of options required
-    subopts = {'skip': lambda dt: hasattr(dt, 'must_skip') and dt.must_skip}
-    if 'maxth' in opts:
-        subopts['maxth'] = opts['maxth']
-    if 'output' in opts:
-        subopts['output'] = opts['output']
-
     # Execute the tests
-    result = dtest.run(tests, **subopts)
+    result = queue.run()
 else:
     result = True
 
     # Print out the names of the tests
     print "Discovered tests:\n"
-    for dt in tests:
+    for dt in queue.tests:
         if dt.istest():
             print str(dt)
 
 # Are we to dump the dependency graph?
 if 'dotpath' in opts:
     with open(opts['dotpath'], 'w') as f:
-        print >>f, dtest.dot(tests)
+        print >>f, dtest.dot(queue.tests)
 
 # All done!
 sys.exit(result)

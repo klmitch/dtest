@@ -46,223 +46,11 @@ from eventlet.semaphore import Semaphore
 
 from dtest import capture
 from dtest.constants import *
+from dtest.exceptions import DTestException
 from dtest import test
 
 
 DEF_LINEWIDTH = 78
-
-
-class Queue(object):
-    """
-    Queue
-    =====
-
-    The Queue class maintains a queue of tests waiting to be run.  The
-    constructor selects the tests, based on the result of the skip()
-    function passed in, while the spawn() method selects and spawns
-    the actual tests to be run.  The run() method is the entry point,
-    causing the initial set of tests to be run, and run_test() is run
-    in a separate thread for each test.  Note that the algorithm
-    implemented here for selecting waiting tests may not properly
-    detect cycles, and the test runner could hang as a result.
-
-    Implementation Details
-    ----------------------
-
-    The ``output`` attribute references the output instance to be
-    passed when running a test.  The ``sem`` attribute is either None
-    or a Semaphore instance used to cap the number of threads that can
-    be running at any given time.  The ``tests`` attribute is a
-    utility attribute containing the list of defined tests, while the
-    ``waiting`` attribute is a set containing all tests which are
-    still waiting to be run (skipped tests will never appear in this
-    set).  Thread safety requires that accesses to the ``waiting``
-    attribute be locked, so a Semaphore instance is stored in the
-    ``waitlock`` parameter for this purpose.  Finally, the
-    ``th_count``, ``th_simul``, and ``th_max`` attributes maintain a
-    count of currently executing threads, currently executing
-    simultaneous threads, and the maximum thread count observed,
-    respectively, while ``th_event`` contains an Event instance which
-    is signaled once it is determined that all tests have been run.
-    """
-
-    def __init__(self, tests, maxth, skip, output):
-        """
-        Initialize a Queue.  The ``maxth`` argument must be either
-        None or an integer specifying the maximum number of
-        simultaneous threads permitted.  The ``skip`` arguments is
-        function references; it should take a test and return True if
-        the test should be skipped.  The ``output`` argument should be
-        an instance of DTestOutput containing a notify() method, which
-        takes a test and the state to which it is transitioning, and
-        may use that information to emit a test result.  Note that the
-        notify() method will receive state transitions to the RUNNING
-        state, as well as state transitions for test fixtures; callers
-        may find the DTestBase.istest() method useful for
-        differentiating between regular tests and test fixtures for
-        reporting purposes.
-        """
-
-        # Save output for future use
-        self.output = output
-
-        # maxth allows us to limit the number of simultaneously
-        # executing threads
-        if maxth is None:
-            self.sem = None
-        else:
-            self.sem = Semaphore(maxth)
-
-        # When reporting is done, we need a list of all tests...
-        self.tests = tests
-
-        # Prepare all the tests for running--allocates a result
-        for dt in self.tests:
-            dt._prepare()
-
-        # Generate a list of tests; skip() returns True to cause a
-        # test to be skipped.  Default skip() tests the test's _skip
-        # attribute.
-        waiting = []
-        for dt in self.tests:
-            # Do we skip this one?
-            willskip = skip(dt)
-
-            # Check if it's a fixture with no dependencies
-            if not willskip and isinstance(dt, test.DTestFixture):
-                if dt._partner is None:
-                    if len(dt._revdeps) == 0:
-                        willskip = True
-                else:
-                    if len(dt._revdeps) == 1:
-                        willskip = True
-
-            # OK, mark it skipped if we're skipping
-            if willskip:
-                dt._skipped(self.output)
-            else:
-                waiting.append(dt)
-
-        # Some tests may have moved to the SKIPPED state due to
-        # dependencies, so filter them out
-        self.waiting = set([dt for dt in self.tests if dt.state != SKIPPED])
-        self.waitlock = Semaphore()
-
-        # Count threads, and allocate an event to be signaled when the
-        # last thread exits
-        self.th_count = 0
-        self.th_event = Event()
-        self.th_simul = 0
-        self.th_max = 0
-
-        # Place to keep any exceptions we encountered within dtest
-        # while running a test
-        self.caught = []
-
-    def spawn(self, tests):
-        """
-        Selects all ready tests from the set or list specified in
-        ``tests`` and spawns threads to execute them.  Note that the
-        maximum thread count restriction is implemented by having the
-        thread wait on the ``sem`` Semaphore after being spawned.
-        """
-
-        # Work with a copy of the tests
-        tests = list(tests)
-
-        # Loop through the list
-        while tests:
-            # Pop off a test to consider
-            test = tests.pop(0)
-
-            with self.waitlock:
-                # Is test waiting?
-                if test not in self.waiting:
-                    continue
-
-                # OK, check dependencies
-                elif test._depcheck(self.output):
-                    # No longer waiting
-                    self.waiting.remove(test)
-
-                    # Spawn the test
-                    self.th_count += 1
-                    spawn_n(self.run_test, test)
-
-                # Dependencies failed; check if state changed and add
-                # its dependents if so
-                elif test.state is not None:
-                    # No longer waiting
-                    self.waiting.remove(test)
-
-                    # Check all its dependents.  Note--not trying to
-                    # remove duplicates, because some formerly
-                    # unrunnable tests may now be runnable because of
-                    # the state change
-                    tests.extend(list(test.dependents))
-
-    def run(self):
-        """
-        Runs all tests that have been queued up in the Queue object.
-        Does not return until all tests have been run.  Note that if
-        dependency cycles are present, this function may hang.
-        """
-
-        # Walk through all the waiting tests; note the copy, to avoid
-        # modifications to self.waiting from upsetting us
-        self.spawn(self.waiting)
-
-        # Wait for all tests to finish
-        if self.th_count > 0:
-            self.th_event.wait()
-
-        # For convenience, return the full list of results
-        return [t.result for t in self.tests]
-
-    def run_test(self, test):
-        """
-        Execute ``test``.  This method is meant to be run in a new
-        thread.
-
-        Once a test is complete, the thread's dependents will be
-        passed back to the spawn() method, in order to pick up and
-        execute any tests that are now ready for execution.
-        """
-
-        # Acquire the semaphore
-        if self.sem is not None:
-            self.sem.acquire()
-
-        # Increment the simultaneous count
-        self.th_simul += 1
-        if self.th_simul > self.th_max:
-            self.th_max = self.th_simul
-
-        # Execute the test
-        try:
-            test._run(_output=self.output)
-        except:
-            # Add the exception to the caught list
-            self.caught.append(sys.exc_info())
-
-            # Manually transition the test to the ERROR state
-            test._result._transition(ERROR)
-
-        # Now, walk through its dependents and check readiness
-        self.spawn(test.dependents)
-
-        # All right, we're done; release the semaphore
-        if self.sem is not None:
-            self.sem.release()
-
-        # Decrement the thread count
-        self.th_simul -= 1
-        self.th_count -= 1
-
-        # If thread count is now 0, signal the event
-        with self.waitlock:
-            if len(self.waiting) == 0 and self.th_count == 0:
-                self.th_event.send()
 
 
 class DTestOutput(object):
@@ -494,78 +282,297 @@ class DTestOutput(object):
         print >>self.output, ('-' * self.linewidth) + "\n"
 
 
-def run(tests, maxth=None, skip=lambda dt: dt.skip, output=DTestOutput()):
+class DTestQueue(object):
     """
-    Run all ``tests``.  The ``maxth`` argument, if an integer,
-    indicates the maximum number of simultaneously executing threads
-    that may be used.  The ``skip`` argument specifies a function
-    which, when passed a test, returns True to indicate that that test
-    should be skipped; by default, it returns the value of the
-    ``skip`` attribute on the test, which may be set using the @skip
-    decorator.  The ``output`` argument specifies an instance of
-    DTestOutput, which is expected to implement notify(), result(),
-    and summary() methods to generate the relevant output in the
-    desired format; see the documentation for DTestOutput for more
-    information.
+    DTestQueue
+    ==========
 
-    Returns True if all tests passed (excluding expected failures).
+    The DTestQueue class maintains a queue of tests waiting to be run.
+    The constructor initializes the queue to an empty state and stores
+    a maximum simultaneous thread count ``maxth`` (None means
+    unlimited); a ``skip`` evaluation routine (defaults to testing the
+    ``skip`` attribute of the test); and an instance of DTestOutput.
+    The list of all tests in the queue is maintained in the ``tests``
+    attribute; tests may be added to a queue with add_test() (for a
+    single test) or add_tests() (for a sequence of tests).  The tests
+    in the queue may be run by invoking the run() method.
     """
 
-    # Let's begin by making sure we're monkey-patched
-    monkey_patch()
+    def __init__(self, maxth=None, skip=lambda dt: dt.skip,
+                 output=DTestOutput()):
+        """
+        Initialize a DTestQueue.  The ``maxth`` argument must be
+        either None or an integer specifying the maximum number of
+        simultaneous threads permitted.  The ``skip`` arguments is
+        function references; it should take a test and return True if
+        the test should be skipped.  The ``output`` argument should be
+        an instance of DTestOutput containing a notify() method, which
+        takes a test and the state to which it is transitioning, and
+        may use that information to emit a test result.  Note that the
+        notify() method will receive state transitions to the RUNNING
+        state, as well as state transitions for test fixtures; callers
+        may find the DTestBase.istest() method useful for
+        differentiating between regular tests and test fixtures for
+        reporting purposes.
+        """
 
-    # Now, initialize the test queue...
-    q = Queue(tests, maxth, skip, output)
+        # Save our maximum thread count
+        if maxth is None:
+            self.sem = None
+        else:
+            self.sem = Semaphore(maxth)
 
-    # Install the capture proxies...
-    capture.install()
+        # Need to remember the skip routine
+        self.skip = skip
 
-    # Run the tests
-    results = q.run()
+        # Also remember the output
+        self.output = output
 
-    # Uninstall the capture proxies
-    capture.uninstall()
+        # Initialize the lists of tests
+        self.tests = set()
+        self.waiting = None
 
-    # Walk through the tests and output the results
-    cnt = {
-        OK: 0,
-        UOK: 0,
-        SKIPPED: 0,
-        FAIL: 0,
-        XFAIL: 0,
-        ERROR: 0,
-        DEPFAIL: 0,
-        'total': 0,
-        'threads': q.th_max,
-        }
-    for r in results:
-        # Update the counts
-        cnt[r.state] += int(r.test)
-        cnt['total'] += int(r.test)
+        # Need a lock for the waiting list
+        self.waitlock = Semaphore()
 
-        # Special case update for unexpected OKs and expected failures
-        if r.state == UOK:
-            cnt[OK] += int(r.test)
-        elif r.state == XFAIL:
-            cnt[FAIL] += int(r.test)
+        # Set up some statistics...
+        self.th_count = 0
+        self.th_event = Event()
+        self.th_simul = 0
+        self.th_max = 0
 
-        output.result(r)
+        # Place to keep any exceptions we encounter within dtest
+        # itself
+        self.caught = []
 
-    # Emit summary data
-    output.summary(cnt)
+        # We're not yet running
+        self.running = False
 
-    # If we saw exceptions, emit data about them
-    if q.caught:
-        output.caught(q.caught)
+    def add_test(self, tst):
+        """
+        Add a test ``tst`` to the queue.  Tests can be added multiple
+        times, but the test will only be run once.
+        """
 
-    # Return False if there were any unexpected failures or errors
-    if cnt[FAIL] > 0 or cnt[ERROR] > 0 or cnt[DEPFAIL] > 0:
-        return False
+        # Can't add a test if the queue is running
+        if self.running:
+            raise DTestException("Cannot add tests to a running queue.")
 
-    return True
+        # First we need to get the test object
+        dt = test._gettest(tst)
+
+        # Add it to the set of tests
+        self.tests.add(dt)
+
+    def add_tests(self, tests):
+        """
+        Add a sequence of tests ``tests`` to the queue.  Tests can be
+        added multiple times, but the test will only be run once.
+        """
+
+        # Can't add a test if the queue is running
+        if self.running:
+            raise DTestException("Cannot add tests to a running queue.")
+
+        # Run add_test() in a loop
+        for tst in tests:
+            self.add_test(tst)
+
+    def run(self):
+        """
+        Runs all tests that have been queued up.  Does not return
+        until all tests have been run.  Causes test results and
+        summary data to be emitted using the ``output`` object
+        registered when the queue was initialized.  Note that if
+        dependency cycles are present, this function may hang.
+        """
+
+        # Can't run an already running queue
+        if self.running:
+            raise DTestException("Queue is already running.")
+
+        # OK, put ourselves into the running state
+        self.running = True
+
+        # Must begin by ensuring we're monkey-patched
+        monkey_patch()
+
+        # OK, let's prepare all the tests...
+        for dt in self.tests:
+            dt._prepare()
+
+        # Second pass--determine which tests are being skipped
+        waiting = []
+        for dt in self.tests:
+            # Do we skip this one?
+            willskip = self.skip(dt)
+
+            # If not, check if it's a fixture with no dependencies...
+            if not willskip and not dt.istest():
+                if dt._partner is None:
+                    if len(dt._revdeps) == 0:
+                        willskip = True
+                else:
+                    if len(dt._revdeps) == 1:
+                        willskip = True
+
+            # OK, mark it skipped if we're skipping
+            if willskip:
+                dt._skipped(self.output)
+            else:
+                waiting.append(dt)
+
+        # OK, last pass: generate list of waiting tests; have to
+        # filter out SKIPPED tests
+        self.waiting = set([dt for dt in self.tests if dt.state != SKIPPED])
+
+        # Install the capture proxies...
+        capture.install()
+
+        # Spawn waiting tests
+        self._spawn(self.waiting)
+
+        # Wait for all tests to finish
+        if self.th_count > 0:
+            self.th_event.wait()
+
+        # OK, uninstall the capture proxies
+        capture.uninstall()
+
+        # Walk through the tests and output the results
+        cnt = {
+            OK: 0,
+            UOK: 0,
+            SKIPPED: 0,
+            FAIL: 0,
+            XFAIL: 0,
+            ERROR: 0,
+            DEPFAIL: 0,
+            'total': 0,
+            'threads': self.th_max,
+            }
+        for t in self.tests:
+            # Get the result object
+            r = t.result
+
+            # Update the counts
+            cnt[r.state] += int(r.test)
+            cnt['total'] += int(r.test)
+
+            # Special case update for unexpected OKs and expected failures
+            if r.state == UOK:
+                cnt[OK] += int(r.test)
+            elif r.state == XFAIL:
+                cnt[FAIL] += int(r.test)
+
+            self.output.result(r)
+
+        # Emit summary data
+        self.output.summary(cnt)
+
+        # If we saw exceptions, emit data about them
+        if self.caught:
+            self.output.caught(self.caught)
+
+        # We're done running; re-running should be legal
+        self.running = False
+
+        # Return False if there were any unexpected failures or errors
+        if cnt[FAIL] > 0 or cnt[ERROR] > 0 or cnt[DEPFAIL] > 0:
+            return False
+
+        # All tests passed!
+        return True
+
+    def _spawn(self, tests):
+        """
+        Selects all ready tests from the set or list specified in
+        ``tests`` and spawns threads to execute them.  Note that the
+        maximum thread count restriction is implemented by having the
+        thread wait on the ``sem`` Semaphore after being spawned.
+        """
+
+        # Work with a copy of the tests
+        tests = list(tests)
+
+        # Loop through the list
+        while tests:
+            # Pop off a test to consider
+            dt = tests.pop(0)
+
+            with self.waitlock:
+                # Is test waiting?
+                if dt not in self.waiting:
+                    continue
+
+                # OK, check dependencies
+                elif dt._depcheck(self.output):
+                    # No longer waiting
+                    self.waiting.remove(dt)
+
+                    # Spawn the test
+                    self.th_count += 1
+                    spawn_n(self._run_test, dt)
+
+                # Dependencies failed; check if state changed and add
+                # its dependents if so
+                elif dt.state is not None:
+                    # No longer waiting
+                    self.waiting.remove(dt)
+
+                    # Check all its dependents.  Note--not trying to
+                    # remove duplicates, because some formerly
+                    # unrunnable tests may now be runnable because of
+                    # the state change
+                    tests.extend(list(dt.dependents))
+
+    def _run_test(self, dt):
+        """
+        Execute ``dt``.  This method is meant to be run in a new
+        thread.
+
+        Once a test is complete, the thread's dependents will be
+        passed back to the spawn() method, in order to pick up and
+        execute any tests that are now ready for execution.
+        """
+
+        # Acquire the thread semaphore
+        if self.sem is not None:
+            self.sem.acquire()
+
+        # Increment the simultaneous thread count
+        self.th_simul += 1
+        if self.th_simul > self.th_max:
+            self.th_max = self.th_simul
+
+        # Execute the test
+        try:
+            dt._run(self.output)
+        except:
+            # Add the exception to the caught list
+            self.caught.append(sys.exc_info())
+
+            # Manually transition the test to the ERROR state
+            dt._result._transition(ERROR)
+
+        # Now, walk through its dependents and check readiness
+        self._spawn(dt.dependents)
+
+        # All right, we're done; release the semaphore
+        if self.sem is not None:
+            self.sem.release()
+
+        # Decrement the thread count
+        self.th_simul -= 1
+        self.th_count -= 1
+
+        # If thread count is now 0, signal the event
+        with self.waitlock:
+            if len(self.waiting) == 0 and self.th_count == 0:
+                self.th_event.send()
 
 
-def explore(directory=None):
+def explore(directory=None, queue=None):
     """
     Explore ``directory`` (by default, the current working directory)
     for all modules matching the test regular expression and import
@@ -578,6 +585,10 @@ def explore(directory=None):
     path, the module name, and a tuple of exception information as
     returned by sys.exc_info().
     """
+
+    # If no queue is provided, allocate one with the default settings
+    if queue is None:
+        queue = DTestQueue()
 
     # Set of all discovered tests
     tests = set()
@@ -704,8 +715,15 @@ def explore(directory=None):
     # path
     sys.path = tmppath
 
-    # Return the tests
-    return tests, caught
+    # Add the discovered tests to the queue
+    queue.add_tests(tests)
+
+    # Output the import errors, if any
+    if caught:
+        queue.output.imports(caught)
+
+    # Return the queue
+    return queue
 
 
 def main(directory=None, maxth=None, skip=lambda dt: dt.skip,
@@ -719,30 +737,29 @@ def main(directory=None, maxth=None, skip=lambda dt: dt.skip,
     passed, False if a failure or error was encountered.
     """
 
-    # First, discover the tests of interest
-    tests, caught = explore(directory)
+    # First, allocate a queue
+    queue = DTestQueue(maxth, skip, output)
 
-    # If there were import errors, report them
-    if caught:
-        output.imports(caught)
+    # Next, discover the tests of interest
+    explore(directory, queue)
 
     # Is this a dry run?
     if not dryrun:
         # Nope, execute the tests
-        result = run(tests, maxth=maxth, skip=skip, output=output)
+        result = queue.run()
     else:
         result = True
 
         # Print out the names of the tests
         print "Discovered tests:\n"
-        for dt in tests:
+        for dt in queue.tests:
             if dt.istest():
                 print str(dt)
 
     # Are we to dump the dependency graph?
     if dotpath is not None:
         with open(dotpath, 'w') as f:
-            print >>f, test.dot(tests)
+            print >>f, test.dot(queue.tests)
 
     # Now, let's return the result of the test run
     return result

@@ -418,32 +418,24 @@ class DTestBase(object):
         # Re-set our name
         self._name = None
 
-    def _run(self, *args, **kwargs):
+    def _run(self, output):
         """
         Perform the test.  Causes any fixtures discovered as part of
         the class or explicitly set (or overridden) by the setUp() and
         tearDown() methods to be executed before and after the actual
-        test, respectively.  Returns the result of the test.  Note
-        that the ``_output`` keyword argument is extracted and used to
-        call a notify() method; see the run_tests() function for more
-        details.
+        test, respectively.  Returns the result of the test.
         """
 
         # Need a helper to unwrap and call class methods and static
         # methods
-        def do_call(method, obj, args, kwargs):
+        def do_call(method, obj):
             # If obj is not None, extract the method with getattr(),
             # so we use the right calling convention
             if obj is not None:
                 method = getattr(obj, method.__name__)
 
             # Now call it
-            return method(*args, **kwargs)
-
-        # Extract the notification
-        output = kwargs.get('_output')
-        if '_output' in kwargs:
-            del kwargs['_output']
+            return method()
 
         # Transition to the running state
         self._result._transition(RUNNING, output=output)
@@ -456,17 +448,17 @@ class DTestBase(object):
         # Perform preliminary call
         if self._pre is not None:
             with self._result.accumulate(PRE):
-                do_call(self._pre, obj, args, kwargs)
+                do_call(self._pre, obj)
 
         # Execute the test
         with self._result.accumulate(TEST, self._raises):
-            do_call(self._test, obj, args, kwargs)
+            do_call(self._test, obj)
 
         # Invoke any clean-up that's necessary (regardless of
         # exceptions)
         if self._post is not None:
             with self._result.accumulate(POST):
-                do_call(self._post, obj, args, kwargs)
+                do_call(self._post, obj)
 
         # Transition to the appropriate ending state
         self._result._transition(output=output)
