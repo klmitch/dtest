@@ -911,6 +911,7 @@ def visit_mod(mod, tests):
         setUp, tearDown = visit_mod(sys.modules[pkgname], mod._dt_visited)
 
     # See if we have fixtures in this module
+    setUpLocal = None
     if hasattr(mod, SETUP):
         setUpLocal = _gettest(getattr(mod, SETUP), DTestFixture)
 
@@ -925,6 +926,10 @@ def visit_mod(mod, tests):
         # Set up the dependency
         if tearDown is not None:
             depends(tearDownLocal)(tearDown)
+
+        # Also set up the partner dependency
+        if setUpLocal is not None:
+            tearDownLocal._set_partner(setUpLocal)
 
         tearDown = tearDownLocal
 
@@ -1045,6 +1050,11 @@ class DTestCaseMeta(type):
             setUpClass._attach(cls)
         if tearDownClass is not None:
             tearDownClass._attach(cls)
+
+        # Also set up the dependency between setUpClass and
+        # tearDownClass
+        if setUpClass is not None and tearDownClass is not None:
+            tearDownClass._set_partner(setUpClass)
 
         # Now, let's scan all the class attributes and set them up as
         # tests with appropriate dependencies...
