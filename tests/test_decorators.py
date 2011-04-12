@@ -113,4 +113,3 @@ class TestDecorators(DTestCase):
 
         # Verify that it's None on something else
         assert_is_none(test_raises._dt_dtest.timeout)
-
