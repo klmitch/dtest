@@ -91,6 +91,20 @@ def test_discovery():
         assert t not in tnames, "Prohibited test %r discovered" % t
 
 
+@dtest.istest
+def test_partner_setUp():
+    # Look up setUpRun and make sure it's right
+    setUpRun = sys.modules['tests.test_partner'].setUpRun
+    util.assert_false(setUpRun)
+
+
+@dtest.istest
+def test_partner_tearDown():
+    # Look up tearDownRun and make sure it's right
+    tearDownRun = sys.modules['tests.test_partner'].tearDownRun
+    util.assert_false(tearDownRun)
+
+
 # Start by processing the command-line arguments
 (options, args) = dtest.optparser(usage="%prog [options]").parse_args()
 
@@ -110,12 +124,16 @@ if caught:
     output.imports(caught)
 
 # Now, set up the dependency between tests.tearDown and our
-# test_ordering() test
+# test_ordering() test and the test_partner_*() tests
 dtest.depends(sys.modules['tests'].tearDown)(test_ordering)
+dtest.depends(sys.modules['tests'].tearDown)(test_partner_setUp)
+dtest.depends(sys.modules['tests'].tearDown)(test_partner_tearDown)
 
-# Have to add test_ordering() and test_discovery() to tests
+# Have to add local tests to tests set
 tests.add(test_ordering._dt_dtest)
 tests.add(test_discovery._dt_dtest)
+tests.add(test_partner_setUp._dt_dtest)
+tests.add(test_partner_tearDown._dt_dtest)
 
 # Implement the rest of dtest.main()
 if not opts.get('dryrun', False):
