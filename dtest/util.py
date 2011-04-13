@@ -248,8 +248,9 @@ def assert_raises(excepts, *args, **kwargs):
     # First, check if excepts is a sequence
     try:
         length = len(excepts)
+        excepts = tuple(excepts)
     except (TypeError, NotImplementedError):
-        excepts = [excepts]
+        excepts = (excepts,)
 
     # Now, grab a context
     ctx = AssertRaisesContext(excepts, noRaiseMsg, matchRegExp)
