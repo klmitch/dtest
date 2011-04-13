@@ -108,6 +108,9 @@ class DTestOutput(object):
         # Emit the status message
         print >>self.output, "%-*s %s" % (width, name, state)
 
+        # Flush the output
+        self.output.flush()
+
     def result(self, result):
         """
         Called at the end of a test run to emit ``result`` information
@@ -159,6 +162,9 @@ class DTestOutput(object):
             out_msg(result[TEST])
         if POST in result:
             out_msg(result[POST], 'Post-test Fixture')
+
+        # Flush the output
+        self.output.flush()
 
     def summary(self, counts):
         """
@@ -237,6 +243,9 @@ class DTestOutput(object):
             print >>self.output, ("  %d tests failed (%s)" %
                                   (total, ', '.join(bd)))
 
+        # Flush the output
+        self.output.flush()
+
     def caught(self, exc_list):
         """
         Called after emitting summary data to report any exceptions
@@ -261,6 +270,9 @@ class DTestOutput(object):
         print >>self.output, ("Please report the above errors to the "
                               "developers of the dtest framework.")
 
+        # Flush the output
+        self.output.flush()
+
     def imports(self, exc_list):
         """
         Called by main() if import errors were encountered while
@@ -280,6 +292,9 @@ class DTestOutput(object):
             print >>self.output, exc_hdr.center(self.linewidth, '-')
             print >>self.output, tb.rstrip()
         print >>self.output, ('-' * self.linewidth) + "\n"
+
+        # Flush the output
+        self.output.flush()
 
 
 class DTestQueue(object):
