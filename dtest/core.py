@@ -296,6 +296,20 @@ class DTestOutput(object):
         # Flush the output
         self.output.flush()
 
+    def info(self, message):
+        """
+        Called to emit other specialized messages not specifically
+        categorized.  Currently only used in the case of dependency
+        cycle detection.  The ``message`` argument will be an
+        explanatory message.
+        """
+
+        # Emit the message
+        print >>self.output, '\n' + message
+
+        # Flush the output
+        self.output.flush()
+
 
 class DTestQueue(object):
     """
@@ -346,9 +360,11 @@ class DTestQueue(object):
         # Initialize the lists of tests
         self.tests = set()
         self.waiting = None
+        self.runlist = set()
 
-        # Need a lock for the waiting list
+        # Need locks for the waiting and runlist lists
         self.waitlock = Semaphore()
+        self.runlock = Semaphore()
 
         # Set up some statistics...
         self.th_count = 0
@@ -525,6 +541,10 @@ class DTestQueue(object):
                     # No longer waiting
                     self.waiting.remove(dt)
 
+                    # Place test on the run list
+                    with self.runlock:
+                        self.runlist.add(dt)
+
                     # Spawn the test
                     self.th_count += 1
                     spawn_n(self._run_test, dt)
@@ -570,6 +590,10 @@ class DTestQueue(object):
             # Manually transition the test to the ERROR state
             dt._result._transition(ERROR, output=self.output)
 
+        # OK, done running the test; take it off the run list
+        with self.runlock:
+            self.runlist.remove(dt)
+
         # Now, walk through its dependents and check readiness
         self._spawn(dt.dependents)
 
@@ -585,6 +609,24 @@ class DTestQueue(object):
         with self.waitlock:
             if len(self.waiting) == 0 and self.th_count == 0:
                 self.th_event.send()
+                return
+
+            # If the run list is empty, that means we have a cycle
+            with self.runlock:
+                if len(self.runlist) == 0:
+                    for dt2 in list(self.waiting):
+                        # Manually transition to DEPFAIL
+                        dt2._result._transition(DEPFAIL, output=self.output)
+
+                    # Emit an error message to let the user know what
+                    # happened
+                    self.output.info("A dependency cycle was discovered.  "
+                                     "Please examine the dependency graph "
+                                     "and correct the cycle.  The --dot "
+                                     "option may be useful here.")
+
+                    # Now, let's signal our event
+                    self.th_event.send()
 
 
 def explore(directory=None, queue=None):
