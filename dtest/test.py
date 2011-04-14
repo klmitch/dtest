@@ -146,7 +146,10 @@ class DTestBase(object):
         """
 
         # Get the attribute out of the _attrs map
-        return self._attrs[key]
+        try:
+            return self._attrs[key]
+        except KeyError:
+            raise AttributeError(key)
 
     def __setattr__(self, key, value):
         """
