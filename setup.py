@@ -19,7 +19,7 @@ from distutils.core import setup
 
 setup(
     name='DTest',
-    version='0.2.1',
+    version='0.2.2',
     description="Dependency-based Threaded Test Framework",
     author="Kevin L. Mitchell",
     author_email="kevin.mitchell@rackspace.com",
