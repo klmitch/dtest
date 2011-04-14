@@ -568,7 +568,7 @@ class DTestQueue(object):
             self.caught.append(sys.exc_info())
 
             # Manually transition the test to the ERROR state
-            dt._result._transition(ERROR)
+            dt._result._transition(ERROR, output=self.output)
 
         # Now, walk through its dependents and check readiness
         self._spawn(dt.dependents)
