@@ -414,8 +414,7 @@ class DTestQueue(object):
         Runs all tests that have been queued up.  Does not return
         until all tests have been run.  Causes test results and
         summary data to be emitted using the ``output`` object
-        registered when the queue was initialized.  Note that if
-        dependency cycles are present, this function may hang.
+        registered when the queue was initialized.
         """
 
         # Can't run an already running queue
