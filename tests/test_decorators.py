@@ -14,6 +14,7 @@
 #    under the License.
 
 from dtest import *
+from dtest.test import DTestFixture
 from dtest.util import *
 
 
@@ -57,6 +58,12 @@ def test_timed():
 
 
 class TestDecorators(DTestCase):
+    @classmethod
+    @depends(test_timed)
+    @isfixture
+    def setUpClass(cls):
+        pass
+
     @istest
     def skip(self):
         # Verify that skip is true...
@@ -113,3 +120,14 @@ class TestDecorators(DTestCase):
 
         # Verify that it's None on something else
         assert_is_none(test_raises._dt_dtest.timeout)
+
+    @istest
+    def isfixture(self):
+        # Verify that setUpClass has a fixture associated with it
+        assert_is_instance(self.setUpClass._dt_dtest, DTestFixture)
+
+        # Verify that we have the appropriate dependencies
+        assert_in(test_timed._dt_dtest, self.setUpClass._dt_dtest.dependencies)
+
+        # Verify that we have the appropriate dependents
+        assert_in(self.setUpClass._dt_dtest, test_timed._dt_dtest.dependents)

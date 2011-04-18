@@ -741,6 +741,22 @@ def nottest(func):
     return func
 
 
+def isfixture(func):
+    """
+    Decorates a function to indicate that the function is a test
+    fixture, i.e., package- or module-level setUp()/tearDown() or
+    class-level setUpClass()/tearDownClass().  This decorator must be
+    used first on any fixture that one of the other decorators (e.g.,
+    @depends(), @timed()) will be used on.
+    """
+
+    # Make sure func has a DTestFixture associated with it
+    _gettest(func, DTestFixture)
+
+    # Return the function
+    return func
+
+
 def skip(func):
     """
     Decorates a test to indicate that the test should be skipped.

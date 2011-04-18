@@ -59,8 +59,8 @@ from dtest.constants import *
 from dtest.exceptions import DTestException
 from dtest.core import DTestQueue, DTestOutput, explore, main, \
     optparser, opts_to_args
-from dtest.test import istest, nottest, skip, failing, attr, depends, \
-    raises, timed, DTestCase, dot
+from dtest.test import istest, nottest, isfixture, skip, failing, attr, \
+    depends, raises, timed, DTestCase, dot
 
 __all__ = ['Capturer',
            'PRE', 'POST', 'TEST',
@@ -69,5 +69,5 @@ __all__ = ['Capturer',
            'DTestException',
            'DTestQueue', 'DTestOutput', 'explore', 'main',
            'optparser', 'opts_to_args',
-           'istest', 'nottest', 'skip', 'failing', 'attr', 'depends',
-           'raises', 'timed', 'DTestCase', 'dot']
+           'istest', 'nottest', 'isfixture', 'skip', 'failing', 'attr',
+           'depends', 'raises', 'timed', 'DTestCase', 'dot']
