@@ -117,7 +117,7 @@ class DTestResult(object):
         capture.retrieve()
 
         # If test should be timed, set up the timeout
-        if self._ctx == TEST and self._test._timeout:
+        if self._test._timeout:
             self._timeout = Timeout(self._test._timeout,
                                     AssertionError("Timed out after %s "
                                                    "seconds" %
