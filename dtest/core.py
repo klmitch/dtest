@@ -409,7 +409,7 @@ class DTestQueue(object):
         for tst in tests:
             self.add_test(tst)
 
-    def run(self):
+    def run(self, debug=False):
         """
         Runs all tests that have been queued up.  Does not return
         until all tests have been run.  Causes test results and
@@ -457,7 +457,8 @@ class DTestQueue(object):
         self.waiting = set([dt for dt in self.tests if dt.state != SKIPPED])
 
         # Install the capture proxies...
-        capture.install()
+        if not debug:
+            capture.install()
 
         # Spawn waiting tests
         self._spawn(self.waiting)
@@ -467,7 +468,8 @@ class DTestQueue(object):
             self.th_event.wait()
 
         # OK, uninstall the capture proxies
-        capture.uninstall()
+        if not debug:
+            capture.uninstall()
 
         # Walk through the tests and output the results
         cnt = {
@@ -783,7 +785,7 @@ def explore(directory=None, queue=None):
 
 
 def main(directory=None, maxth=None, skip=lambda dt: dt.skip,
-         output=DTestOutput(), dryrun=False, dotpath=None):
+         output=DTestOutput(), dryrun=False, debug=False, dotpath=None):
     """
     Discover tests under ``directory`` (by default, the current
     directory), then run the tests under control of ``maxth``,
@@ -802,7 +804,7 @@ def main(directory=None, maxth=None, skip=lambda dt: dt.skip,
     # Is this a dry run?
     if not dryrun:
         # Nope, execute the tests
-        result = queue.run()
+        result = queue.run(debug=debug)
     else:
         result = True
 
@@ -854,6 +856,11 @@ def optparser(*args, **kwargs):
                   action="store_true", dest="dryrun",
                   help="Performs a dry run.  After discovering all tests, "
                   "the list of tests is printed to standard output.")
+    op.add_option("-D", "--debug",
+                  action="store_true", dest="debug",
+                  help="Enables debugging mode.  Disables output capturing "
+                  "for running tests, causing all output to be emitted "
+                  "immediately.")
     op.add_option("--dot",
                   action="store", type="string", dest="dotpath",
                   help="After running tests, a text representation of the "
@@ -894,6 +901,10 @@ def opts_to_args(options):
     # Are we doing a dry run?
     if options.dryrun is True:
         args['dryrun'] = True
+
+    # Are we in debug mode?
+    if options.debug is True:
+        args['debug'] = True
 
     # How about dumping the dependency graph?
     if options.dotpath is not None:
