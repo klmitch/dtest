@@ -694,6 +694,10 @@ def _gettest(func, testcls=DTest):
     if isinstance(func, DTestBase):
         return func
 
+    # If it's a class method or static method, unwrap it
+    if isinstance(func, (classmethod, staticmethod)):
+        func = func.__func__
+
     # Always return None if _dt_nottest is set
     if func is None or (hasattr(func, '_dt_nottest') and func._dt_nottest):
         return None
