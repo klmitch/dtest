@@ -449,17 +449,21 @@ class DTestBase(object):
             obj = self._class()
 
         # Perform preliminary call
+        pre_status = True
         if self._pre is not None:
             with self._result.accumulate(PRE):
                 do_call(self._pre, obj)
+            if not self._result:
+                pre_status = False
 
         # Execute the test
-        with self._result.accumulate(TEST, self._raises):
-            do_call(self._test, obj)
+        if pre_status:
+            with self._result.accumulate(TEST, self._raises):
+                do_call(self._test, obj)
 
         # Invoke any clean-up that's necessary (regardless of
         # exceptions)
-        if self._post is not None:
+        if pre_status and self._post is not None:
             with self._result.accumulate(POST):
                 do_call(self._post, obj)
 

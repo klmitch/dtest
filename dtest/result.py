@@ -140,7 +140,7 @@ class DTestResult(object):
         captured = capture.retrieve()
 
         # If this was the test, determine a result
-        if self._ctx == TEST:
+        if self._ctx in (PRE, TEST):
             if self._excs:
                 self._result = exc_type in self._excs
                 self._error = (exc_type not in self._excs and
