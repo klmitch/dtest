@@ -49,7 +49,10 @@ output and standard error are captured by default).
 
 Tests may be written using the ``assert`` statement, if desired, but a
 number of utilities are available in the dtest.util package for
-performing various common tests.
+performing various common tests.  Additionally, a special output
+stream, ``dtest.status``, is provided; this stream may be used to emit
+status messages to inform the user of the status of a long-running
+test.
 
 Note that both dtest and dtest.util are safe for use with "import *".
 """
@@ -57,7 +60,7 @@ Note that both dtest and dtest.util are safe for use with "import *".
 from dtest.capture import Capturer
 from dtest.constants import *
 from dtest.exceptions import DTestException
-from dtest.core import DTestQueue, DTestOutput, explore, main, \
+from dtest.core import DTestQueue, DTestOutput, status, explore, main, \
     optparser, opts_to_args
 from dtest.test import istest, nottest, isfixture, skip, failing, attr, \
     depends, raises, timed, DTestCase, dot
@@ -67,7 +70,7 @@ __all__ = ['Capturer',
            'RUNNING', 'FAIL', 'XFAIL', 'ERROR', 'DEPFAIL', 'OK', 'UOK',
            'SKIPPED',
            'DTestException',
-           'DTestQueue', 'DTestOutput', 'explore', 'main',
+           'DTestQueue', 'DTestOutput', 'status', 'explore', 'main',
            'optparser', 'opts_to_args',
            'istest', 'nottest', 'isfixture', 'skip', 'failing', 'attr',
            'depends', 'raises', 'timed', 'DTestCase', 'dot']

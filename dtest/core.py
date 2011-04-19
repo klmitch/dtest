@@ -41,6 +41,7 @@ import sys
 import traceback
 
 from eventlet import spawn_n, monkey_patch
+from eventlet.corolocal import local
 from eventlet.event import Event
 from eventlet.semaphore import Semaphore
 
@@ -50,7 +51,49 @@ from dtest.exceptions import DTestException
 from dtest import test
 
 
+# Default line width
 DEF_LINEWIDTH = 78
+
+
+# Current output for issuing status messages
+_output = local()
+
+
+class _DTestStatus(object):
+    """
+    _DTestStatus
+    ============
+
+    The _DTestStatus class is a stream look-alike class, an instance
+    of which implements the special ``dtest.status`` stream.  Data
+    written to the stream will be passed to the status() method of the
+    current DTestOutput object.  Thread-local data is used to store
+    the current DTestOutput object, so multiple output objects may be
+    safely used simultaneously.
+    """
+
+    def write(self, msg):
+        """
+        Emits ``msg`` as a status message to the current DTestOutput
+        object.  This can be used to notify the user of the status of
+        a test which takes a long time to complete.
+        """
+
+        # Write to the registered output
+        _output.out.status(msg)
+
+    def flush(self):
+        """
+        Provided for compatibility with normal output streams.  Does
+        nothing; the DTestOutput object's status() method is assumed
+        to perform a flush after every call.
+        """
+
+        pass
+
+
+# A stream for export
+status = _DTestStatus()
 
 
 class DTestOutput(object):
@@ -306,6 +349,22 @@ class DTestOutput(object):
 
         # Emit the message
         print >>self.output, '\n' + message
+
+        # Flush the output
+        self.output.flush()
+
+    def status(self, message):
+        """
+        Called to emit status messages printed to the dtest.result
+        stream.  The ``message`` argument will be a message string or,
+        if using the ``print`` statement, bare whitespace.  The
+        default implementation writes the message to the
+        ``self.output`` stream, then flushes it to ensure the message
+        is emitted.
+        """
+
+        # Emit the message; we're called by write(), so use write()
+        self.output.write(message)
 
         # Flush the output
         self.output.flush()
@@ -580,6 +639,10 @@ class DTestQueue(object):
         self.th_simul += 1
         if self.th_simul > self.th_max:
             self.th_max = self.th_simul
+
+        # Save the output relative to this thread, for the status
+        # stream
+        _output.out = self.output
 
         # Execute the test
         try:
