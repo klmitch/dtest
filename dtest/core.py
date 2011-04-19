@@ -80,7 +80,7 @@ class _DTestStatus(object):
         """
 
         # Write to the registered output
-        _output.out.status(msg)
+        _output.out.status(_output.test, msg)
 
     def flush(self):
         """
@@ -353,18 +353,29 @@ class DTestOutput(object):
         # Flush the output
         self.output.flush()
 
-    def status(self, message):
+    def status(self, dt, message):
         """
         Called to emit status messages printed to the dtest.result
-        stream.  The ``message`` argument will be a message string or,
-        if using the ``print`` statement, bare whitespace.  The
-        default implementation writes the message to the
-        ``self.output`` stream, then flushes it to ensure the message
-        is emitted.
+        stream.  The ``dt`` argument will be the test descriptor, and
+        the ``message`` argument will be a message string or, if using
+        the ``print`` statement, bare whitespace.  The default
+        implementation ignores messages consisting of whitespace and
+        writes non-whitespace messages, prefixed with the short name
+        of ``dt``, to the ``self.output`` stream; the output stream
+        will be flushed to ensure the message is emitted.
         """
 
-        # Emit the message; we're called by write(), so use write()
-        self.output.write(message)
+        # Ignore messages composed only of whitespace...
+        if message.isspace():
+            return
+
+        # Get the short name of the test...
+        shname = str(dt)
+        if '.' in shname:
+            dummy, shname = shname.rsplit('.', 1)
+
+        # Emit the message
+        print >>self.output, "%s: %s" % (shname, message)
 
         # Flush the output
         self.output.flush()
@@ -640,9 +651,10 @@ class DTestQueue(object):
         if self.th_simul > self.th_max:
             self.th_max = self.th_simul
 
-        # Save the output relative to this thread, for the status
-        # stream
+        # Save the output and test relative to this thread, for the
+        # status stream
         _output.out = self.output
+        _output.test = dt
 
         # Execute the test
         try:
