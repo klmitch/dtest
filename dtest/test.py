@@ -696,7 +696,21 @@ def _gettest(func, testcls=DTest):
 
     # If it's a class method or static method, unwrap it
     if isinstance(func, (classmethod, staticmethod)):
-        func = func.__func__
+        try:
+            func = func.__func__
+        except AttributeError:
+            # Python 2.6 doesn't have __func__ attribute on
+            # classmethod or staticmethod, so let's kludge around
+            # it...
+            tmp = func.__get__(None, object)
+
+            # If it's an instance of staticmethod, tmp is func
+            if isinstance(func, staticmethod):
+                func = tmp
+
+            # If it's an instance of classmethod, tmp has __func__
+            else:
+                func = tmp.__func__
 
     # Always return None if _dt_nottest is set
     if func is None or (hasattr(func, '_dt_nottest') and func._dt_nottest):
