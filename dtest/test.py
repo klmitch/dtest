@@ -1187,7 +1187,7 @@ def dot(tests, grname='testdeps'):
     # Now, create the graph
     nodes = []
     edges = []
-    for dt in tests:
+    for dt in sorted(tests, key=lambda dt: str(dt)):
         # If it's not a callable, must be class or static method;
         # get the real test
         test = dt._test if callable(dt._test) else dt._test.__func__
@@ -1210,7 +1210,7 @@ def dot(tests, grname='testdeps'):
         nodes.append('"%s"%s;' % (dt, mkopts(opts)))
 
         # Make all the edges
-        for dep in dt._deps:
+        for dep in sorted(dt._deps, key=lambda dt: str(dt)):
             opts = {}
             if (isinstance(dt, DTestFixture) or
                 isinstance(dep, DTestFixture)):
