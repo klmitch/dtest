@@ -59,7 +59,6 @@ def test_timed():
 
 class TestDecorators(DTestCase):
     @depends(test_timed)
-    @isfixture
     @classmethod
     def setUpClass(cls):
         pass

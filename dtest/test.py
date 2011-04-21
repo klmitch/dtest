@@ -100,6 +100,14 @@ class DTestBase(object):
     DTest class to return True.
     """
 
+    # Keep a list of the recognized attributes for the promote()
+    # classmethod
+    _class_attributes = [
+        '_name', '_test', '_class', '_exp_fail', '_skip', '_pre', '_post',
+        '_deps', '_revdeps', '_partner', '_attrs', '_raises', '_timeout',
+        '_result',
+        ]
+
     def __init__(self, test):
         """
         Initialize a DTestBase instance wrapping ``test``.
@@ -378,6 +386,44 @@ class DTestBase(object):
         # We want the timeout to be read-only, but to be accessed like
         # an attribute
         return self._timeout
+
+    @classmethod
+    def promote(cls, test):
+        """
+        Promotes a DTestBase instance from one class to another.
+        """
+
+        # If test is None, return None
+        if test is None:
+            return None
+
+        # If it's already the same class, return it
+        if test.__class__ == cls:
+            return test
+
+        # First, allocate a new instance
+        newtest = object.__new__(cls)
+
+        # Now, initialize it from test
+        for attr in cls._class_attributes:
+            setattr(newtest, attr, getattr(test, attr))
+
+        # Walk through all dependencies/dependents and replace the
+        # test
+        for dep in newtest._deps:
+            dep._revdeps.remove(test)
+            dep._revdeps.add(newtest)
+        for dep in newtest._revdeps:
+            dep._deps.remove(test)
+            dep._deps.add(newtest)
+
+        # Replace the bindings in the test
+        newtest._test._dt_dtest = newtest
+        newtest._test.setUp = newtest.setUp
+        newtest._test.tearDown = newtest.tearDown
+
+        # Return the new test
+        return newtest
 
     def setUp(self, pre):
         """
@@ -697,7 +743,7 @@ class DTestFixture(DTestBase):
         super(DTestFixture, self)._skipped(output)
 
 
-def _gettest(func, testcls=DTest):
+def _gettest(func, testcls=DTest, promote=False):
     """
     Retrieves a DTest from--or, if ``testcls`` is not None, attaches a
     new test of that class to--``func``.  This is a helper function
@@ -706,7 +752,7 @@ def _gettest(func, testcls=DTest):
 
     # We could be passed a DTest, so return it if so
     if isinstance(func, DTestBase):
-        return func
+        return testcls.promote(func) if promote else func
 
     # If it's a class method or static method, unwrap it
     if isinstance(func, (classmethod, staticmethod)):
@@ -732,7 +778,7 @@ def _gettest(func, testcls=DTest):
 
     # Look up the test as a function attribute
     try:
-        return func._dt_dtest
+        return testcls.promote(func._dt_dtest) if promote else func._dt_dtest
     except AttributeError:
         # Don't want to create one, I guess
         if testcls is None:
@@ -777,13 +823,13 @@ def isfixture(func):
     """
     Decorates a function to indicate that the function is a test
     fixture, i.e., package- or module-level setUp()/tearDown() or
-    class-level setUpClass()/tearDownClass().  This decorator must be
-    used first on any fixture that one of the other decorators (e.g.,
-    @depends(), @timed()) will be used on.
+    class-level setUpClass()/tearDownClass().
+
+    This decorator is now deprecated.
     """
 
     # Make sure func has a DTestFixture associated with it
-    _gettest(func, DTestFixture)
+    _gettest(func, DTestFixture, True)
 
     # Return the function
     return func
@@ -960,7 +1006,7 @@ def visit_mod(mod, tests):
     # See if we have fixtures in this module
     setUpLocal = None
     if hasattr(mod, SETUP):
-        setUpLocal = _gettest(getattr(mod, SETUP), DTestFixture)
+        setUpLocal = _gettest(getattr(mod, SETUP), DTestFixture, True)
 
         # Set up the dependency
         if setUp is not None:
@@ -968,7 +1014,7 @@ def visit_mod(mod, tests):
 
         setUp = setUpLocal
     if hasattr(mod, TEARDOWN):
-        tearDownLocal = _gettest(getattr(mod, TEARDOWN), DTestFixture)
+        tearDownLocal = _gettest(getattr(mod, TEARDOWN), DTestFixture, True)
 
         # Set up the dependency
         if tearDown is not None:
@@ -1088,9 +1134,9 @@ class DTestCaseMeta(type):
         setUp = getattr(cls, SETUP, None)
         tearDown = getattr(cls, TEARDOWN, None)
         setUpClass = _gettest(getattr(cls, SETUP + CLASS, None),
-                              DTestFixture)
+                              DTestFixture, True)
         tearDownClass = _gettest(getattr(cls, TEARDOWN + CLASS, None),
-                                 DTestFixture)
+                                 DTestFixture, True)
 
         # Attach the class to the fixtures
         if setUpClass is not None:
