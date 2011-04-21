@@ -536,13 +536,27 @@ class DTestBase(object):
     def _depcheck(self, output):
         """
         Performs a check of all this test's dependencies, to determine
-        if the test can be executed.  This is an abstract method that
-        is overridden by the DTest and DTestFixture classes to
-        implement class-specific behavior.
+        if the test can be executed.  Tests can only be executed if
+        all their dependencies have passed.
         """
 
-        # Abstract method; subclasses must define!
-        raise Exception("Subclasses must implement _depcheck()")
+        # All dependencies must be OK
+        for dep in self._deps:
+            if (dep.state == FAIL or dep.state == ERROR or
+                dep.state == XFAIL or dep.state == DEPFAIL):
+                # Set our own state to DEPFAIL
+                self._result._transition(DEPFAIL, output=output)
+                return False
+            elif dep.state == SKIPPED:
+                # Set our own state to SKIPPED
+                self._result._transition(SKIPPED, output=output)
+                return False
+            elif dep.state != OK and dep.state != UOK:
+                # Dependencies haven't finished up, yet
+                return False
+
+        # All dependencies satisfied!
+        return True
 
     def _skipped(self, output):
         """
@@ -607,31 +621,6 @@ class DTest(DTestBase):
         # count
         return 1
 
-    def _depcheck(self, output):
-        """
-        Performs a check of all this test's dependencies, to determine
-        if the test can be executed.  Tests can only be executed if
-        all their dependencies have passed.
-        """
-
-        # All dependencies must be OK
-        for dep in self._deps:
-            if (dep.state == FAIL or dep.state == ERROR or
-                dep.state == XFAIL or dep.state == DEPFAIL):
-                # Set our own state to DEPFAIL
-                self._result._transition(DEPFAIL, output=output)
-                return False
-            elif dep.state == SKIPPED:
-                # Set our own state to SKIPPED
-                self._result._transition(SKIPPED, output=output)
-                return False
-            elif dep.state != OK and dep.state != UOK:
-                # Dependencies haven't finished up, yet
-                return False
-
-        # All dependencies satisfied!
-        return True
-
     def istest(self):
         """
         Returns True if the instance is a test or False if the
@@ -675,6 +664,66 @@ class DTestFixture(DTestBase):
         # Now, save our pair partner
         self._partner = setUp
 
+    def _skipped(self, output):
+        """
+        Marks this DTestFixture instance as having been skipped.  Test
+        fixtures may only be skipped if *all* their dependencies have
+        been skipped.
+        """
+
+        # Only bother if all our dependencies are also skipped--tear
+        # down fixtures need to run any time the corresponding set up
+        # fixtures have run
+        for dep in self._deps:
+            if dep is not self._partner and dep.state != SKIPPED:
+                return
+
+        # Call the superclass method
+        super(DTestFixture, self)._skipped(output)
+
+    def _notify_skipped(self, output):
+        """
+        Notifies this DTestFixture instance that a dependent has been
+        skipped.  If all the fixture's dependents have been skipped,
+        then the test fixture will also be skipped.
+        """
+
+        # If all tests dependent on us have been skipped, we don't
+        # need to run
+        for dep in self._revdeps:
+            if dep.state != SKIPPED:
+                return
+
+        # Call the superclass's _skipped() method
+        super(DTestFixture, self)._skipped(output)
+
+
+class DTestFixtureSetUp(DTestFixture):
+    """
+    DTestFixtureSetUp
+    =================
+
+    The DTestFixtureSetUp class represents setUp() and setUpClass()
+    test fixtures to be executed before enclosed tests.  It is derived
+    from DTestFixture.
+    """
+
+    pass
+
+
+class DTestFixtureTearDown(DTestFixture):
+    """
+    DTestFixtureTearDown
+    ====================
+
+    The DTestFixtureTearDown class represents tearDown() and
+    tearDownClass() test fixtures to be executed after enclosed tests.
+    It is derived from DTestFixture, but overrides the _depcheck()
+    method to ensure that tearDown() and tearDownClass() are always
+    called even if some of the dependencies have failed (unless the
+    corresponding setUp() or setUpClass() fixtures have failed).
+    """
+
     def _depcheck(self, output):
         """
         Performs a check of all this test fixture's dependencies, to
@@ -708,39 +757,6 @@ class DTestFixture(DTestBase):
         # been skipped, or have completed--they just have to be in
         # that state before running the fixture
         return True
-
-    def _skipped(self, output):
-        """
-        Marks this DTestFixture instance as having been skipped.  Test
-        fixtures may only be skipped if *all* their dependencies have
-        been skipped.
-        """
-
-        # Only bother if all our dependencies are also skipped--tear
-        # down fixtures need to run any time the corresponding set up
-        # fixtures have run
-        for dep in self._deps:
-            if dep is not self._partner and dep.state != SKIPPED:
-                return
-
-        # Call the superclass method
-        super(DTestFixture, self)._skipped(output)
-
-    def _notify_skipped(self, output):
-        """
-        Notifies this DTestFixture instance that a dependent has been
-        skipped.  If all the fixture's dependents have been skipped,
-        then the test fixture will also be skipped.
-        """
-
-        # If all tests dependent on us have been skipped, we don't
-        # need to run
-        for dep in self._revdeps:
-            if dep.state != SKIPPED:
-                return
-
-        # Call the superclass's _skipped() method
-        super(DTestFixture, self)._skipped(output)
 
 
 def _gettest(func, testcls=DTest, promote=False):
@@ -827,9 +843,6 @@ def isfixture(func):
 
     This decorator is now deprecated.
     """
-
-    # Make sure func has a DTestFixture associated with it
-    _gettest(func, DTestFixture, True)
 
     # Return the function
     return func
@@ -1006,7 +1019,8 @@ def visit_mod(mod, tests):
     # See if we have fixtures in this module
     setUpLocal = None
     if hasattr(mod, SETUP):
-        setUpLocal = _gettest(getattr(mod, SETUP), DTestFixture, True)
+        setUpLocal = _gettest(getattr(mod, SETUP),
+                              DTestFixtureSetUp, True)
 
         # Set up the dependency
         if setUp is not None:
@@ -1014,7 +1028,8 @@ def visit_mod(mod, tests):
 
         setUp = setUpLocal
     if hasattr(mod, TEARDOWN):
-        tearDownLocal = _gettest(getattr(mod, TEARDOWN), DTestFixture, True)
+        tearDownLocal = _gettest(getattr(mod, TEARDOWN),
+                                 DTestFixtureTearDown, True)
 
         # Set up the dependency
         if tearDown is not None:
@@ -1134,9 +1149,9 @@ class DTestCaseMeta(type):
         setUp = getattr(cls, SETUP, None)
         tearDown = getattr(cls, TEARDOWN, None)
         setUpClass = _gettest(getattr(cls, SETUP + CLASS, None),
-                              DTestFixture, True)
+                              DTestFixtureSetUp, True)
         tearDownClass = _gettest(getattr(cls, TEARDOWN + CLASS, None),
-                                 DTestFixture, True)
+                                 DTestFixtureTearDown, True)
 
         # Attach the class to the fixtures
         if setUpClass is not None:
