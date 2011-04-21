@@ -112,7 +112,21 @@ class DTestBase(object):
         # We have to unwrap MethodType and class and static methods
         if (isinstance(test, types.MethodType) or
             isinstance(test, classmethod) or isinstance(test, staticmethod)):
-            test = test.__func__
+            try:
+                test = test.__func__
+            except AttributeError:
+                # Python 2.6 doesn't have __func__ attribute on
+                # classmethod or staticmethod, so let's kludge around
+                # it...
+                tmp = test.__get__(None, object)
+
+                # If it's an instance of staticmethod, tmp is func
+                if isinstance(test, staticmethod):
+                    test = tmp
+
+                # If it's an instance of classmethod, tmp has __func__
+                else:
+                    test = tmp.__func__
 
         # Require it to be a callable...
         if not callable(test):
@@ -1188,9 +1202,8 @@ def dot(tests, grname='testdeps'):
     nodes = []
     edges = []
     for dt in sorted(tests, key=lambda dt: str(dt)):
-        # If it's not a callable, must be class or static method;
-        # get the real test
-        test = dt._test if callable(dt._test) else dt._test.__func__
+        # Get the real test function
+        test = dt._test
 
         # Make the node
         opts = dict(label=r'%s\n%s:%d' %
