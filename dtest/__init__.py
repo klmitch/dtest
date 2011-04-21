@@ -41,19 +41,25 @@ indicating that a test is expected to raise a given exception or one
 of a given set of exceptions (@raises()); and marking that a test
 should conclude within a given time limit (@timed()).
 
-Once tests have been discovered, a dependency graph may be generated
-using the DTestQueue.dot() method, or the test suite may be executed
-by calling the DTestQueue.run().  It is also possible to capture
-arbitrary output by extending and instantiating the Capturer class
-(note that standard output and standard error are captured by
-default).
+Tests may be discovered using the explore() function, which returns an
+instance of DTestQueue.  (This instance may be passed to other
+invocation of explore(), to discover tests in multiple directories.)
+Once tests have been discovered, a dependency graph may then be
+generated using the DTestQueue.dot() method, or the test suite may be
+executed by calling the DTestQueue.run().
 
-Tests may be written using the ``assert`` statement, if desired, but a
-number of utilities are available in the dtest.util package for
-performing various common tests.  Additionally, a special output
-stream, ``dtest.status``, is provided; this stream may be used to emit
-status messages to inform the user of the status of a long-running
-test.
+It is possible to capture arbitrary forms of output by extending and
+instantiating the Capturer class.  Note that standard output and
+standard error are captured by default.  Capturing may be disabled for
+a test run by passing a True ``debug`` argument to the
+DTestQueue.run() method.
+
+Tests themselves may be written using the ``assert`` statement, if
+desired, but a number of utilities are available in the dtest.util
+package for performing various common tests.  Additionally, a special
+output stream, ``dtest.status``, is provided; this stream may be used
+to emit status messages to inform the user of the status of a
+long-running test.
 
 Note that both dtest and dtest.util are safe for use with "import *".
 """

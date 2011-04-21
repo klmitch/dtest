@@ -481,14 +481,14 @@ class DTestQueue(object):
 
     def dot(self, grname='testdeps'):
         """
-        Constructs a GraphViz-compatible dependency graph with the given
-        name (``testdeps``, by default).  Returns the graph as a string.
-        The graph can be fed to the ``dot`` tool to generate a
-        visualization of the dependency graph.  Note that red nodes in the
-        graph indicate test fixtures, and red dashed edges indicate
-        dependencies associated with test fixtures.  If the node outline
-        is dotted, that indicates that the test was skipped in the most
-        recent test run.
+        Constructs a GraphViz-compatible dependency graph with the
+        given name (``testdeps``, by default).  Returns the graph as a
+        string.  The graph can be fed to the ``dot`` tool to generate
+        a visualization of the dependency graph.  Note that red nodes
+        in the graph indicate test fixtures, and red dashed edges
+        indicate dependencies associated with test fixtures.  If the
+        node outline is dotted, that indicates that the test was
+        skipped in the most recent test run.
         """
 
         # Helper to generate node and edge options
