@@ -154,7 +154,7 @@ else:
 # Are we to dump the dependency graph?
 if 'dotpath' in opts:
     with open(opts['dotpath'], 'w') as f:
-        print >>f, dtest.dot(queue.tests)
+        print >>f, queue.dot()
 
 # All done!
 sys.exit(result)

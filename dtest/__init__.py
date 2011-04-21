@@ -42,10 +42,11 @@ of a given set of exceptions (@raises()); and marking that a test
 should conclude within a given time limit (@timed()).
 
 Once tests have been discovered, a dependency graph may be generated
-using the dot() function, or the test suite may be executed by calling
-run_tests().  It is also possible to capture arbitrary output by
-extending and instantiating the Capturer class (note that standard
-output and standard error are captured by default).
+using the DTestQueue.dot() method, or the test suite may be executed
+by calling the DTestQueue.run().  It is also possible to capture
+arbitrary output by extending and instantiating the Capturer class
+(note that standard output and standard error are captured by
+default).
 
 Tests may be written using the ``assert`` statement, if desired, but a
 number of utilities are available in the dtest.util package for
@@ -63,7 +64,7 @@ from dtest.exceptions import DTestException
 from dtest.core import DTestQueue, DTestOutput, status, explore, main, \
     optparser, opts_to_args
 from dtest.test import istest, nottest, isfixture, skip, failing, attr, \
-    depends, raises, timed, DTestCase, dot
+    depends, raises, timed, DTestCase
 
 __all__ = ['Capturer',
            'PRE', 'POST', 'TEST',
@@ -73,4 +74,4 @@ __all__ = ['Capturer',
            'DTestQueue', 'DTestOutput', 'status', 'explore', 'main',
            'optparser', 'opts_to_args',
            'istest', 'nottest', 'isfixture', 'skip', 'failing', 'attr',
-           'depends', 'raises', 'timed', 'DTestCase', 'dot']
+           'depends', 'raises', 'timed', 'DTestCase']

@@ -479,6 +479,67 @@ class DTestQueue(object):
         for tst in tests:
             self.add_test(tst)
 
+    def dot(self, grname='testdeps'):
+        """
+        Constructs a GraphViz-compatible dependency graph with the given
+        name (``testdeps``, by default).  Returns the graph as a string.
+        The graph can be fed to the ``dot`` tool to generate a
+        visualization of the dependency graph.  Note that red nodes in the
+        graph indicate test fixtures, and red dashed edges indicate
+        dependencies associated with test fixtures.  If the node outline
+        is dotted, that indicates that the test was skipped in the most
+        recent test run.
+        """
+
+        # Helper to generate node and edge options
+        def mkopts(opts):
+            # If there are no options, return an empty string
+            if not opts:
+                return ''
+
+            # OK, let's do this...
+            return ' [' + ','.join(['%s="%s"' % (k, opts[k])
+                                    for k in opts]) + ']'
+
+        # Now, create the graph
+        nodes = []
+        edges = []
+        for dt in sorted(self.tests, key=lambda dt: str(dt)):
+            # Get the real test function
+            tfunc = dt.test
+
+            # Make the node
+            opts = dict(label=r'%s\n%s:%d' %
+                        (dt, tfunc.func_code.co_filename,
+                         tfunc.func_code.co_firstlineno))
+            if dt.state:
+                opts['label'] += r'\n(Result: %s)' % dt.state
+            if (dt.state == FAIL or dt.state == XFAIL or dt.state == ERROR or
+                dt.state == DEPFAIL):
+                opts['color'] = 'red'
+            elif isinstance(dt, test.DTestFixture):
+                opts['color'] = 'blue'
+            if dt.state == SKIPPED:
+                opts['style'] = 'dotted'
+            elif dt.state == DEPFAIL:
+                opts['style'] = 'dashed'
+            nodes.append('"%s"%s;' % (dt, mkopts(opts)))
+
+            # Make all the edges
+            for dep in sorted(dt.dependencies, key=lambda dt: str(dt)):
+                opts = {}
+                if (isinstance(dt, test.DTestFixture) or
+                    isinstance(dep, test.DTestFixture)):
+                    opts.update(dict(color='blue', style='dashed'))
+                if dt._partner is not None and dep == dt._partner:
+                    opts['style'] = 'dotted'
+
+                edges.append('"%s" -> "%s"%s;' % (dt, dep, mkopts(opts)))
+
+        # Return a graph
+        return (('strict digraph "%s" {\n\t' % grname) +
+                '\n\t'.join(nodes) + '\n\n\t' + '\n\t'.join(edges) + '\n}')
+
     def run(self, debug=False):
         """
         Runs all tests that have been queued up.  Does not return
@@ -892,7 +953,7 @@ def main(directory=None, maxth=None, skip=lambda dt: dt.skip,
     # Are we to dump the dependency graph?
     if dotpath is not None:
         with open(dotpath, 'w') as f:
-            print >>f, test.dot(queue.tests)
+            print >>f, queue.dot()
 
     # Now, let's return the result of the test run
     return result
