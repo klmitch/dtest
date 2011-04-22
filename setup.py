@@ -27,7 +27,7 @@ setup(
     scripts=['bin/run-dtests'],
     packages=['dtest'],
     license="LICENSE.txt",
-    long_description=open('README.txt').read(),
+    long_description=open('README.rst').read(),
     requires=['eventlet'],
     classifiers=[
         'Development Status :: 3 - Alpha',
