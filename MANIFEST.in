@@ -1,2 +1,2 @@
-include run_tests.py *.txt
+include run_tests.py *.txt *.rst
 graft tests
