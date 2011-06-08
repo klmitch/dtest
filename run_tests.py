@@ -141,7 +141,7 @@ queue.add_test(test_partner_tearDown)
 # Implement the rest of dtest.main()
 if not opts.get('dryrun', False):
     # Execute the tests
-    result = queue.run()
+    result = queue.run(opts.get('debug', False))
 else:
     result = True
 
