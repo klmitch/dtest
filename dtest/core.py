@@ -154,14 +154,15 @@ class DTestOutput(object):
         # Flush the output
         self.output.flush()
 
-    def result(self, result):
+    def result(self, result, debug=False):
         """
         Called at the end of a test run to emit ``result`` information
         for a given test.  Called once for each result.  Should emit
         all exception and captured output information, if any.  Will
         also be called for results from test fixtures, in order to
         emit errors encountered while executing them.  The default
-        implementation ignores results containing no messages.
+        implementation ignores results containing no messages, and
+        only emits results from successful tests if debug is True.
         """
 
         # Helper for reporting output
@@ -191,6 +192,11 @@ class DTestOutput(object):
 
         # Skip results with no messages
         if len(result) == 0:
+            return
+
+        # If it's successful or an expected failure, only emit
+        # messages if debug is True
+        if not debug and (result.state == OK or result.state == XFAIL):
             return
 
         # Emit a banner for the result
@@ -628,7 +634,13 @@ class DTestQueue(object):
             elif r.state == XFAIL:
                 cnt[FAIL] += int(r.test)
 
-            self.output.result(r)
+            try:
+                # Emit the result messages
+                self.output.result(r, debug)
+            except TypeError:
+                # Maybe the output object is written to the older
+                # standard?
+                self.output.result(r)
 
         # Emit summary data
         self.output.summary(cnt)
