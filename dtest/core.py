@@ -640,8 +640,11 @@ class DTestQueue(object):
         # We're done running; re-running should be legal
         self.running = False
 
-        # Return False if there were any unexpected failures or errors
-        if cnt[FAIL] > 0 or cnt[ERROR] > 0 or cnt[DEPFAIL] > 0:
+        # Return False if there were any unexpected OKs, unexpected
+        # failures, errors, or dependency failures
+        if (cnt[UOK] > 0 or
+            (cnt[FAIL] - cnt[XFAIL]) > 0 or
+            cnt[ERROR] > 0 or cnt[DEPFAIL] > 0):
             return False
 
         # All tests passed!
@@ -928,7 +931,8 @@ def main(directory=None, maxth=None, skip=lambda dt: dt.skip,
     ``skip``, and ``output`` (see the documentation for the run()
     function for more information on these three parameters).  Returns
     True if all tests (with the exclusion of expected failures)
-    passed, False if a failure or error was encountered.
+    passed, or False if an unexpect OK, a failure, or an error was
+    encountered.
     """
 
     # First, allocate a queue
@@ -1062,4 +1066,4 @@ if __name__ == '__main__':
     (options, args) = opts.parse_args()
 
     # Execute the test suite
-    sys.exit(main(**opts_to_args(options)))
+    sys.exit(not main(**opts_to_args(options)))

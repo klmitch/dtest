@@ -30,7 +30,7 @@ def test_skip():
 
 @failing
 def test_failing():
-    pass
+    assert False
 
 
 @attr(attr1=1, attr2=2)
@@ -38,7 +38,7 @@ def test_attr():
     pass
 
 
-@depends(test_skip, test_failing, test_attr, TestThrowaway.test_fordep)
+@depends(test_skip, test_attr, TestThrowaway.test_fordep)
 def test_depends():
     pass
 
@@ -88,17 +88,15 @@ class TestDecorators(DTestCase):
     @istest
     def depends(self):
         # Part 1: Verify that test_depends() is dependent on
-        # test_skip(), test_failing(), and test_attr()
+        # test_skip() and test_attr()
         assert_in(test_skip._dt_dtest, test_depends._dt_dtest.dependencies)
-        assert_in(test_failing._dt_dtest, test_depends._dt_dtest.dependencies)
         assert_in(test_attr._dt_dtest, test_depends._dt_dtest.dependencies)
         assert_in(TestThrowaway.test_fordep._dt_dtest,
                   test_depends._dt_dtest.dependencies)
 
         # Part 2: Verify that test_depends() is in the depedents set
-        # of test_skip(), test_failing(), and test_attr()
+        # of test_skip() and test_attr()
         assert_in(test_depends._dt_dtest, test_skip._dt_dtest.dependents)
-        assert_in(test_depends._dt_dtest, test_failing._dt_dtest.dependents)
         assert_in(test_depends._dt_dtest, test_attr._dt_dtest.dependents)
         assert_in(test_depends._dt_dtest,
                   TestThrowaway.test_fordep._dt_dtest.dependents)

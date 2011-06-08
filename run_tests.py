@@ -157,4 +157,4 @@ if 'dotpath' in opts:
         print >>f, queue.dot()
 
 # All done!
-sys.exit(result)
+sys.exit(not result)
