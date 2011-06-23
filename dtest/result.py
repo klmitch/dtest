@@ -379,3 +379,231 @@ class DTestMessage(object):
         self.exc_type = exc_type
         self.exc_value = exc_value
         self.exc_tb = exc_tb
+
+
+class DTestResultMulti(DTestResult):
+    """
+    DTestResultMulti
+    ================
+
+    The DTestResultMulti class is an extension of the DTestResult
+    class which additionally provides the ability to store the results
+    from multiple tests.  This is used, for example, when a defined
+    test is a generator, to store the results from all generated
+    functions.
+    """
+
+    def __init__(self, test):
+        """
+        Initialize a DTestResultMulti object corresponding to the
+        given ``test``.
+        """
+
+        super(DTestResultMulti, self).__init__(test)
+
+        # Need to keep track of test ID
+        self._nextid = None
+        self._id = None
+
+        # Also need to count successes, failures, and errors
+        self._success_cnt = 0
+        self._failure_cnt = 0
+        self._error_cnt = 0
+        self._total_cnt = 0
+
+    def __enter__(self):
+        """
+        Begin the context handling.  Sets up the stored test ID prior
+        to calling the superclass __enter__() method.
+        """
+
+        # Set up the test ID
+        self._id = self._nextid
+
+        # Perform the rest of the processing
+        super(DTestResultMulti, self).__enter__()
+
+    def __exit__(self, exc_type, exc_value, tb):
+        """
+        Ends context handling.  Calls the superclass __exit__()
+        method, then cleans up the test ID portions of the context.
+        """
+
+        # Perform the basic exit processing
+        super(DTestResultMulti, self).__exit__(exc_type, exc_value, tb)
+
+        # Finish cleaning up the context
+        self._id = None
+        self._nextid = None
+
+        # We handled the exception
+        return True
+
+    def _set_result(self, exc_type, exc_value, tb):
+        """
+        Extends the superclass method to support threshold-style final
+        result computation.
+        """
+
+        # If we're in PRE, defer to the superclass method
+        if self._ctx == PRE:
+            super(DTestResultMulti, self)._set_result(exc_type, exc_value, tb)
+            return
+
+        # Figure out if this is a success, failure, or an error
+        result = None
+        if self._excs:
+            if exc_type in self._excs:
+                result = '_success_cnt'
+        else:
+            if exc_type is None:
+                result = '_success_cnt'
+        if result is None:
+            if exc_type != AssertionError:
+                result = '_error_cnt'
+            else:
+                result = '_failure_cnt'
+
+        # Keep track of the number of successes, failures, and errors
+        setattr(self, result, getattr(self, result) + 1)
+        self._total_cnt += 1
+
+        # Finally, compute the values of _result and _error based on
+        # the threshold strategy of the test
+        self._result, self._error = self._test._comp_result(self._total_cnt,
+                                                            self._success_cnt,
+                                                            self._failure_cnt,
+                                                            self._error_cnt)
+
+    def _storemsg(self, captured, exc_type, exc_value, tb):
+        """
+        Allocates and stores a DTestMessageMulti instance which brings
+        together captured output and exception values.
+        """
+
+        # We only specially TEST-context messages
+        if self._ctx != TEST:
+            super(DTestResultMulti, self)._storemsg(captured, exc_type,
+                                                    exc_value, tb)
+            return
+
+        # Make sure we have a place to store the messages
+        if TEST not in self._msgs:
+            self._msgs[TEST] = KeyedSequence()
+
+        # Get the test ID and modify it until we find an empty slot
+        id = self._id
+        if id in self._msgs[TEST]:
+            i = 1
+            while "%s#%d" % (id, i) in self._msgs[TEST]:
+                i += 1
+            id = "%s#%d" % (id, i)
+
+        # Store a message
+        self._msgs[TEST][id] = DTestMessageMulti(self._ctx, self._id,
+                                                 captured, exc_type,
+                                                 exc_value, tb)
+
+    def accumulate(self, nextctx, excs=None, id=None):
+        """
+        Prepares the DTestResultMulti object for use as a context
+        manager.  The ``nextctx`` argument must be one of the
+        constants PRE, TEST, or POST, indicating which phase of test
+        execution is about to occur.  If ``excs`` is not None, it
+        should be a tuple of the exceptions to expect the execution to
+        raise; the test passes if one of these exceptions is raised,
+        or fails otherwise.
+
+        The ``id`` parameter must be specified if ``nextctx`` is TEST;
+        it identifies the test being executed.
+        """
+
+        # Save the next context
+        self._nextctx = nextctx
+        self._nextid = id
+        self._excs = excs
+        return self
+
+
+class DTestMessageMulti(DTestMessage):
+    """
+    DTestMessageMulti
+    =================
+
+    The DTestMessageMulti class is an extension of DTestMessage that
+    adds an :id: attribute to identify the origin of the message in a
+    DTestResultMulti result.
+    """
+
+    def __init__(self, ctx, id, captured, exc_type, exc_value, exc_tb):
+        """
+        Initialize a DTestMessageMulti object.  See the class
+        docstring for this class and its superclass for the meanings
+        of the parameters.
+        """
+
+        # Call the superclass constructor
+        super(DTestMessageMulti, self).__init__(ctx, captured, exc_type,
+                                                exc_value, exc_tb)
+
+        # Also save the id
+        self.id = id
+
+
+class KeyedSequence(object):
+    def __init__(self):
+        # Keep an index of keys to list positions
+        self._index = {}
+        self._values = []
+
+    def __contains__(self, key):
+        # If key is an integer or a slice, use the values list
+        if isinstance(key, (int, long, slice)):
+            return key in self._values
+
+        # Check if the key exists
+        return key in self._index
+
+    def __getitem__(self, key):
+        # If key is an integer or a slice, use the values list
+        if isinstance(key, (int, long, slice)):
+            return self._values[key]
+
+        # Get the index from the key and return that
+        return self._values[self._index[key]]
+
+    def __setitem__(self, key, value):
+        # If key is a slice, fault
+        if isinstance(key, slice):
+            raise TypeError("cannot replace slice")
+
+        # If key is an integer, use the values list
+        if isinstance(key, (int, long)):
+            self._values[key] = value
+            return
+
+        # Does the key already exist?
+        if key not in self._index:
+            # Adding a new value, so let's add the key to the index
+            self._index[key] = len(self)
+            self._values.append(value)
+            return
+
+        # OK, just need to replace existing value
+        self._values[self._index[key]] = value
+
+    def __len__(self):
+        # Return the values
+        return len(self._values)
+
+    def __iter__(self):
+        # Iterate over the values
+        return iter(self._values)
+
+    def count(self, *args, **kwargs):
+        # Use the values list
+        return self._values.count(*args, **kwargs)
+
+    def index(self, *args, **kwargs):
+        # Use the values list
+        return self._values.index(*args, **kwargs)
