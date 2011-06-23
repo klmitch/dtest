@@ -141,19 +141,11 @@ class DTestResult(object):
 
         # If this was the test, determine a result
         if self._ctx in (PRE, TEST):
-            if self._excs:
-                self._result = exc_type in self._excs
-                self._error = (exc_type not in self._excs and
-                               exc_type != AssertionError)
-            else:
-                self._result = exc_type is None
-                self._error = (exc_type is not None and
-                               exc_type != AssertionError)
+            self._set_result(exc_type, exc_value, tb)
 
         # Generate a message, if necessary
         if captured or exc_type or exc_value or tb:
-            self._msgs[self._ctx] = DTestMessage(self._ctx, captured,
-                                                 exc_type, exc_value, tb)
+            self._storemsg(captured, exc_type, exc_value, tb)
 
         # Clean up the context
         self._ctx = None
@@ -253,6 +245,32 @@ class DTestResult(object):
 
         # Transition to the new state
         self._state = state
+
+    def _set_result(self, exc_type, exc_value, tb):
+        """
+        Determines the result or error status of the test.  Only
+        called if the context is PRE or TEST.
+        """
+
+        # Are we expecting any exceptions?
+        if self._excs:
+            self._result = exc_type in self._excs
+            self._error = (exc_type not in self._excs and
+                           exc_type != AssertionError)
+        else:
+            # Guess we're not...
+            self._result = exc_type is None
+            self._error = (exc_type is not None and
+                           exc_type != AssertionError)
+
+    def _storemsg(self, captured, exc_type, exc_value, tb):
+        """
+        Allocates and stores a DTestMessage instance which brings
+        together captured output and exception values.
+        """
+
+        self._msgs[self._ctx] = DTestMessage(self._ctx, captured,
+                                             exc_type, exc_value, tb)
 
     def accumulate(self, nextctx, excs=None):
         """
