@@ -32,6 +32,76 @@ from dtest.constants import *
 from eventlet.timeout import Timeout
 
 
+class ResultContext(object):
+    """
+    ResultContext
+    =============
+
+    The ResultContext class is a Python context manager used in the
+    automatic collection of captured output and exception handling.
+    It is instantiated by DTestResult.accumulate()
+    """
+
+    def __init__(self, result, ctx, excs):
+        """
+        Initialize a ResultContext associated with the given
+        ``result``.  The context will handle messages for the part of
+        the test run given by ``ctx`` (may be PRE, TEST, or POST).
+        The exceptions listed in the ``excs`` tuple are expected; if
+        no exceptions are expected, pass ``excs`` as None.
+        """
+
+        # Save the basic information
+        self.result = result
+        self.ctx = ctx
+        self.excs = excs
+
+        # There's no timeout...
+        self.timeout = None
+
+    def __enter__(self):
+        """
+        Begin the context handling.  Clears out any captured data and
+        initializes any timeouts defined for the test.
+        """
+
+        # Clear the captured values for this thread
+        capture.retrieve()
+
+        # If test should be timed, set up the timeout
+        if self.result._test._timeout:
+            self.timeout = Timeout(self.result._test._timeout,
+                                   AssertionError("Timed out after %s "
+                                                  "seconds" %
+                                                  self.result._test._timeout))
+
+    def __exit__(self, exc_type, exc_value, tb):
+        """
+        Ends context handling.  Cancels any pending timeouts,
+        retrieves output data and exceptions, and determines the final
+        result of the test.  A DTestMessage object is initialized if
+        necessary.
+        """
+
+        # Cancel the timeout if one is pending
+        if self.timeout is not None:
+            self.timeout.cancel()
+            self.timeout = None
+
+        # Get the output and clean up
+        captured = capture.retrieve()
+
+        # If this was the test, determine a result
+        if self.ctx in (PRE, TEST):
+            self.result._set_result(self, exc_type, exc_value, tb)
+
+        # Generate a message, if necessary
+        if captured or exc_type or exc_value or tb:
+            self.result._storemsg(self, captured, exc_type, exc_value, tb)
+
+        # We handled the exception
+        return True
+
 class DTestResult(object):
     """
     DTestResult
@@ -73,19 +143,6 @@ class DTestResult(object):
     (e.g., ``PRE in result``), and the message itself retrieved using
     array accessor syntax (e.g., ``result[TEST]``).  The total number
     of messages available can be determined using the len() operator.
-
-    Context Handler
-    ---------------
-
-    Instances of DTestResult are context handlers, usable with the
-    Python ``with`` statement.  This is used deep within the DTest
-    class to collect and send the output into the correct DTestMessage
-    object.  A DTestResult object should *never* be used in a ``with``
-    statement without first calling the accumulate() method with a
-    valid origin (one of the constants PRE, TEST, or POST).  For
-    convenience, accumulate() returns the DTestResult object, allowing
-    it to be used directly in the ``with`` statement.  This is an
-    internal interface, and test developers should not need to use it.
     """
 
     def __init__(self, test):
@@ -98,62 +155,7 @@ class DTestResult(object):
         self._state = None
         self._result = None
         self._error = False
-        self._nextctx = None
-        self._ctx = None
-        self._excs = None
-        self._timeout = None
         self._msgs = {}
-
-    def __enter__(self):
-        """
-        Begin the context handling.  Clears out any captured data and
-        initializes any timeouts defined for the test.
-        """
-
-        # Set up the context
-        self._ctx = self._nextctx
-
-        # Clear the captured values for this thread
-        capture.retrieve()
-
-        # If test should be timed, set up the timeout
-        if self._test._timeout:
-            self._timeout = Timeout(self._test._timeout,
-                                    AssertionError("Timed out after %s "
-                                                   "seconds" %
-                                                   self._test._timeout))
-
-    def __exit__(self, exc_type, exc_value, tb):
-        """
-        Ends context handling.  Cancels any pending timeouts,
-        retrieves output data and exceptions, and determines the final
-        result of the test.  A DTestMessage object is initialized if
-        necessary.
-        """
-
-        # Cancel the timeout if one is pending
-        if self._timeout is not None:
-            self._timeout.cancel()
-            self._timeout = None
-
-        # Get the output and clean up
-        captured = capture.retrieve()
-
-        # If this was the test, determine a result
-        if self._ctx in (PRE, TEST):
-            self._set_result(exc_type, exc_value, tb)
-
-        # Generate a message, if necessary
-        if captured or exc_type or exc_value or tb:
-            self._storemsg(captured, exc_type, exc_value, tb)
-
-        # Clean up the context
-        self._ctx = None
-        self._nextctx = None
-        self._excs = None
-
-        # We handled the exception
-        return True
 
     def __nonzero__(self):
         """
@@ -246,16 +248,16 @@ class DTestResult(object):
         # Transition to the new state
         self._state = state
 
-    def _set_result(self, exc_type, exc_value, tb):
+    def _set_result(self, ctx, exc_type, exc_value, tb):
         """
         Determines the result or error status of the test.  Only
         called if the context is PRE or TEST.
         """
 
         # Are we expecting any exceptions?
-        if self._excs:
-            self._result = exc_type in self._excs
-            self._error = (exc_type not in self._excs and
+        if ctx.excs:
+            self._result = exc_type in ctx.excs
+            self._error = (exc_type not in ctx.excs and
                            exc_type != AssertionError)
         else:
             # Guess we're not...
@@ -263,30 +265,28 @@ class DTestResult(object):
             self._error = (exc_type is not None and
                            exc_type != AssertionError)
 
-    def _storemsg(self, captured, exc_type, exc_value, tb):
+    def _storemsg(self, ctx, captured, exc_type, exc_value, tb):
         """
         Allocates and stores a DTestMessage instance which brings
         together captured output and exception values.
         """
 
-        self._msgs[self._ctx] = DTestMessage(self._ctx, captured,
-                                             exc_type, exc_value, tb)
+        self._msgs[ctx.ctx] = DTestMessage(ctx.ctx, captured,
+                                           exc_type, exc_value, tb)
 
     def accumulate(self, nextctx, excs=None):
         """
-        Prepares the DTestResult object for use as a context manager.
-        The ``nextctx`` argument must be one of the constants PRE,
-        TEST, or POST, indicating which phase of test execution is
-        about to occur.  If ``excs`` is not None, it should be a tuple
-        of the exceptions to expect the execution to raise; the test
-        passes if one of these exceptions is raised, or fails
-        otherwise.
+        Prepares a context manager for accumulating output for a
+        portion of a test.  The ``nextctx`` argument must be one of
+        the constants PRE, TEST, or POST, indicating which phase of
+        test execution is about to occur.  If ``excs`` is not None, it
+        should be a tuple of the exceptions to expect the execution to
+        raise; the test passes if one of these exceptions is raised,
+        or fails otherwise.
         """
 
-        # Save the next context
-        self._nextctx = nextctx
-        self._excs = excs
-        return self
+        # Return a context for handling the result
+        return ResultContext(self, nextctx, excs)
 
     @property
     def test(self):
@@ -389,6 +389,32 @@ class DTestMessage(object):
         self.exc_tb = exc_tb
 
 
+class MultiResultContext(ResultContext):
+    """
+    MultiResultContext
+    ==================
+
+    The MultiResultContext class is an extension of the ResultContext
+    context manager that adds the requisite support for message IDs.
+    These are needed to differentiate the results of multiple test
+    runs with DTestResultMulti.
+    """
+
+    def __init__(self, result, ctx, excs, msgid):
+        """
+        Initialize a MultiResultContext associated with the given
+        ``result``.  The additional argument ``msgid`` is an ID to be
+        associated with the messages that are generated as a result of
+        the run; it may be None only if ``ctx`` is TEST.
+        """
+
+        # Initialize the superclass
+        super(MultiResultContext, self).__init__(result, ctx, excs)
+
+        # Save the message ID as well
+        self.msgid = msgid
+
+
 class DTestResultMulti(DTestResult):
     """
     DTestResultMulti
@@ -409,11 +435,6 @@ class DTestResultMulti(DTestResult):
 
         super(DTestResultMulti, self).__init__(test)
 
-        # Need to keep track of test ID
-        self._nextid = None
-        self._id = None
-        self._msgid = None
-
         # Pre-allocate the KeyedSequence, so we don't run into race
         # conditions
         self._msgseq = KeyedSequence()
@@ -428,59 +449,22 @@ class DTestResultMulti(DTestResult):
         self._error_cnt = 0
         self._total_cnt = 0
 
-    def __enter__(self):
-        """
-        Begin the context handling.  Sets up the stored test ID prior
-        to calling the superclass __enter__() method.
-        """
-
-        # Set up the test ID
-        self._id = self._nextid
-
-        # Also set up the message ID, which isn't necessarily the same
-        self._msgid = self._id
-        if self._msgid in self._idseen:
-            i = 1
-            while "%s#%d" % (self._id, i) in self._idseen:
-                i += 1
-            self._msgid = "%s#%d" % (self._id, i)
-        self._idseen.add(self._msgid)
-
-        # Perform the rest of the processing
-        super(DTestResultMulti, self).__enter__()
-
-    def __exit__(self, exc_type, exc_value, tb):
-        """
-        Ends context handling.  Calls the superclass __exit__()
-        method, then cleans up the test ID portions of the context.
-        """
-
-        # Perform the basic exit processing
-        super(DTestResultMulti, self).__exit__(exc_type, exc_value, tb)
-
-        # Finish cleaning up the context
-        self._id = None
-        self._nextid = None
-        self._msgid = None
-
-        # We handled the exception
-        return True
-
-    def _set_result(self, exc_type, exc_value, tb):
+    def _set_result(self, ctx, exc_type, exc_value, tb):
         """
         Extends the superclass method to support threshold-style final
         result computation.
         """
 
         # If we're in PRE, defer to the superclass method
-        if self._ctx == PRE:
-            super(DTestResultMulti, self)._set_result(exc_type, exc_value, tb)
+        if ctx.ctx == PRE:
+            super(DTestResultMulti, self)._set_result(ctx, exc_type,
+                                                      exc_value, tb)
             return
 
         # Figure out if this is a success, failure, or an error
         result = None
-        if self._excs:
-            if exc_type in self._excs:
+        if ctx.excs:
+            if exc_type in ctx.excs:
                 result = '_success_cnt'
         else:
             if exc_type is None:
@@ -502,15 +486,15 @@ class DTestResultMulti(DTestResult):
                                                             self._failure_cnt,
                                                             self._error_cnt)
 
-    def _storemsg(self, captured, exc_type, exc_value, tb):
+    def _storemsg(self, ctx, captured, exc_type, exc_value, tb):
         """
         Allocates and stores a DTestMessageMulti instance which brings
         together captured output and exception values.
         """
 
         # We only specially TEST-context messages
-        if self._ctx != TEST:
-            super(DTestResultMulti, self)._storemsg(captured, exc_type,
+        if ctx.ctx != TEST:
+            super(DTestResultMulti, self)._storemsg(ctx, captured, exc_type,
                                                     exc_value, tb)
             return
 
@@ -520,9 +504,9 @@ class DTestResultMulti(DTestResult):
             self._msgs[TEST] = self._msgseq
 
         # Store a message
-        self._msgseq[self._msgid] = DTestMessageMulti(self._ctx, self._id,
-                                                      captured, exc_type,
-                                                      exc_value, tb)
+        self._msgseq[ctx.msgid] = DTestMessageMulti(ctx.ctx, ctx.msgid,
+                                                    captured, exc_type,
+                                                    exc_value, tb)
 
     def accumulate(self, nextctx, excs=None, id=None):
         """
@@ -538,11 +522,22 @@ class DTestResultMulti(DTestResult):
         it identifies the test being executed.
         """
 
-        # Save the next context
-        self._nextctx = nextctx
-        self._nextid = id
-        self._excs = excs
-        return self
+        # Force id to an empty string, if it's not specified
+        if not id:
+            id = ''
+
+        # Starting with 'id', compute a message ID
+        msgid = id
+        i = 0
+        while msgid in self._idseen:
+            i += 1
+            msgid = "%s#%d" % (id, i)
+
+        # Mark this message ID as in use
+        self._idseen.add(msgid)
+
+        # Return a context for handling the result
+        return MultiResultContext(self, nextctx, excs, msgid)
 
     @property
     def multi(self):
