@@ -105,7 +105,7 @@ class DTestBase(object):
     _class_attributes = [
         '_name', '_test', '_class', '_exp_fail', '_skip', '_pre', '_post',
         '_deps', '_revdeps', '_partner', '_attrs', '_raises', '_timeout',
-        '_result',
+        '_result', '_repeat'
         ]
 
     def __init__(self, test):
@@ -155,6 +155,7 @@ class DTestBase(object):
         self._raises = set()
         self._timeout = None
         self._result = None
+        self._repeat = 1
 
         # Attach ourself to the test
         test._dt_dtest = self
@@ -386,6 +387,17 @@ class DTestBase(object):
         # We want the timeout to be read-only, but to be accessed like
         # an attribute
         return self._timeout
+
+    @property
+    def repeat(self):
+        """
+        Retrieve the repeat count for this test.  Will be 1 unless the
+        @repeat() decorator has been used on this test.
+        """
+
+        # We want the repeat count to be read-only, but to be accessed
+        # like an attribute
+        return self._repeat
 
     @classmethod
     def promote(cls, test):
@@ -987,6 +999,27 @@ def timed(timeout):
 
         # Store the timeout value (in seconds)
         dt._timeout = timeout
+
+        # Return the function
+        return func
+
+    # Return the actual decorator
+    return wrapper
+
+
+def repeat(count):
+    """
+    Decorates a test to indicate that the test must be repeated
+    ``count`` number of times.
+    """
+
+    # Need a wrapper to perform the actual decoration
+    def wrapper(func):
+        # Get the DTest object for the test
+        dt = _gettest(func)
+
+        # Store the repeat count
+        dt._repeat = count
 
         # Return the function
         return func
