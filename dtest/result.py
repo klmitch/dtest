@@ -412,6 +412,15 @@ class DTestResultMulti(DTestResult):
         # Need to keep track of test ID
         self._nextid = None
         self._id = None
+        self._msgid = None
+
+        # Pre-allocate the KeyedSequence, so we don't run into race
+        # conditions
+        self._msgseq = KeyedSequence()
+
+        # Also keep track of IDs we've seen so the generated message
+        # IDs are stable
+        self._idseen = set()
 
         # Also need to count successes, failures, and errors
         self._success_cnt = 0
@@ -428,6 +437,15 @@ class DTestResultMulti(DTestResult):
         # Set up the test ID
         self._id = self._nextid
 
+        # Also set up the message ID, which isn't necessarily the same
+        self._msgid = self._id
+        if self._msgid in self._idseen:
+            i = 1
+            while "%s#%d" % (self._id, i) in self._idseen:
+                i += 1
+            self._msgid = "%s#%d" % (self._id, i)
+        self._idseen.add(self._msgid)
+
         # Perform the rest of the processing
         super(DTestResultMulti, self).__enter__()
 
@@ -443,6 +461,7 @@ class DTestResultMulti(DTestResult):
         # Finish cleaning up the context
         self._id = None
         self._nextid = None
+        self._msgid = None
 
         # We handled the exception
         return True
@@ -495,22 +514,15 @@ class DTestResultMulti(DTestResult):
                                                     exc_value, tb)
             return
 
-        # Make sure we have a place to store the messages
+        # Make sure the message sequence goes in the collection of
+        # messages
         if TEST not in self._msgs:
-            self._msgs[TEST] = KeyedSequence()
-
-        # Get the test ID and modify it until we find an empty slot
-        id = self._id
-        if id in self._msgs[TEST]:
-            i = 1
-            while "%s#%d" % (id, i) in self._msgs[TEST]:
-                i += 1
-            id = "%s#%d" % (id, i)
+            self._msgs[TEST] = self._msgseq
 
         # Store a message
-        self._msgs[TEST][id] = DTestMessageMulti(self._ctx, self._id,
-                                                 captured, exc_type,
-                                                 exc_value, tb)
+        self._msgseq[self._msgid] = DTestMessageMulti(self._ctx, self._id,
+                                                      captured, exc_type,
+                                                      exc_value, tb)
 
     def accumulate(self, nextctx, excs=None, id=None):
         """
