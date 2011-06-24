@@ -557,9 +557,6 @@ class KeyedSequence(object):
         self._values = []
 
     def __contains__(self, key):
-        # If key is an integer or a slice, use the values list
-        if isinstance(key, (int, long, slice)):
-            return key in self._values
 
         # Check if the key exists
         return key in self._index
