@@ -327,6 +327,14 @@ class DTestResult(object):
         # Return the list of messages
         return msglist
 
+    @property
+    def multi(self):
+        """
+        Returns True only if the result is a multi-result.
+        """
+
+        return False
+
 
 class DTestMessage(object):
     """
@@ -523,6 +531,14 @@ class DTestResultMulti(DTestResult):
         self._nextid = id
         self._excs = excs
         return self
+
+    @property
+    def multi(self):
+        """
+        Returns True only if the result is a multi-result.
+        """
+
+        return True
 
 
 class DTestMessageMulti(DTestMessage):

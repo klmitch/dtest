@@ -172,6 +172,11 @@ class DTestOutput(object):
                 print >>self.output, (hdr.center(self.linewidth) + "\n" +
                                       ('-' * self.linewidth))
 
+            # Output the test ID
+            if hasattr(msg, 'id'):
+                id_hdr = " (%s) " % msg.id
+                print >>self.output, id_hdr.center(self.linewidth, ':')
+
             # Output exception information
             if msg.exc_type is not None:
                 exc_hdr = ' Exception %s ' % msg.exc_type.__name__
@@ -208,7 +213,11 @@ class DTestOutput(object):
         if PRE in result:
             out_msg(result[PRE], 'Pre-test Fixture')
         if TEST in result:
-            out_msg(result[TEST])
+            if result.multi:
+                for m in result[TEST]:
+                    out_msg(m)
+            else:
+                out_msg(result[TEST])
         if POST in result:
             out_msg(result[POST], 'Post-test Fixture')
 
