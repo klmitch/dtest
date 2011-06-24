@@ -503,14 +503,14 @@ class DTestBase(object):
 
         # Need a helper to unwrap and call class methods and static
         # methods
-        def do_call(method, obj):
+        def get_call(method, obj):
             # If obj is not None, extract the method with getattr(),
             # so we use the right calling convention
             if obj is not None:
                 method = getattr(obj, method.__name__)
 
             # Now call it
-            return method()
+            return method
 
         # Transition to the running state
         self._result._transition(RUNNING, output=output)
@@ -524,20 +524,20 @@ class DTestBase(object):
         pre_status = True
         if self._pre is not None:
             with self._result.accumulate(PRE):
-                do_call(self._pre, obj)
+                get_call(self._pre, obj)()
             if not self._result:
                 pre_status = False
 
         # Execute the test
         if pre_status:
             with self._result.accumulate(TEST, self._raises):
-                do_call(self._test, obj)
+                get_call(self._test, obj)()
 
         # Invoke any clean-up that's necessary (regardless of
         # exceptions)
         if pre_status and self._post is not None:
             with self._result.accumulate(POST):
-                do_call(self._post, obj)
+                get_call(self._post, obj)()
 
         # Transition to the appropriate ending state
         self._result._transition(output=output)
