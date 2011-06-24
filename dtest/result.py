@@ -551,17 +551,49 @@ class DTestMessageMulti(DTestMessage):
 
 
 class KeyedSequence(object):
+    """
+    KeyedSequence
+    =============
+
+    The KeyedSequence class is a helper class for DTestResultMulti.
+    Messages (DTestMessageMulti objects) from tests are stored in an
+    ordered sequence, but the sequence should also be accessible by a
+    test name.  This class implements an abbreviated sequence
+    interface that enables the sequence to be indexed by an integer
+    index (or array slice), or by a string key.  New items may not be
+    added to the sequence using the standard operations such as
+    append(); they may only be added to the sequence by using
+    assignment by string key.
+
+    This class does support iteration.
+    """
+
     def __init__(self):
+        """
+        Initialize a KeyedSequence object.
+        """
+
         # Keep an index of keys to list positions
         self._index = {}
         self._values = []
 
     def __contains__(self, key):
+        """
+        Determines if ``key`` exists within the sequence.  The ``key``
+        may only be a string; there is no support for searching for
+        items within the sequence.
+        """
 
         # Check if the key exists
         return key in self._index
 
     def __getitem__(self, key):
+        """
+        Retrieve the item or items associated with ``key``.  The
+        ``key`` may be an integer or a string.  Array slices are also
+        supported.
+        """
+
         # If key is an integer or a slice, use the values list
         if isinstance(key, (int, long, slice)):
             return self._values[key]
@@ -570,6 +602,12 @@ class KeyedSequence(object):
         return self._values[self._index[key]]
 
     def __setitem__(self, key, value):
+        """
+        Set the item associated with ``key``.  The ``key`` may be an
+        integer or a string.  Replacing multiple elements with an
+        array slice is not permitted.
+        """
+
         # If key is a slice, fault
         if isinstance(key, slice):
             raise TypeError("cannot replace slice")
@@ -590,17 +628,35 @@ class KeyedSequence(object):
         self._values[self._index[key]] = value
 
     def __len__(self):
+        """
+        Return the number of items in the KeyedSequence.
+        """
+
         # Return the values
         return len(self._values)
 
     def __iter__(self):
+        """
+        Return an iterator which will iterate over the items in the
+        sequence.
+        """
+
         # Iterate over the values
         return iter(self._values)
 
     def count(self, *args, **kwargs):
+        """
+        Count the number of instances of a particular item in the
+        sequence.
+        """
+
         # Use the values list
         return self._values.count(*args, **kwargs)
 
     def index(self, *args, **kwargs):
+        """
+        Determine the index of a particular item in the sequence.
+        """
+
         # Use the values list
         return self._values.index(*args, **kwargs)
