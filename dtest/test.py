@@ -599,6 +599,17 @@ class DTestBase(object):
         # Prepares the test for running by setting up a result
         self._result = result.DTestResult(self)
 
+    def _comp_result(self, tot, suc, fail, err):
+        """
+        Computes the result and error values on behalf of the result
+        object, based on passed-in counts.
+        """
+
+        # Implement the basic threshold algorithm--if there are any
+        # errors, we're in error, else if there are any failures,
+        # we're only in failure, otherwise we're OK.
+        return (fail == 0 and err == 0), (err > 0)
+
 
 class DTest(DTestBase):
     """
