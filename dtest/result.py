@@ -274,7 +274,7 @@ class DTestResult(object):
         self._msgs[ctx.ctx] = DTestMessage(ctx.ctx, captured,
                                            exc_type, exc_value, tb)
 
-    def accumulate(self, nextctx, excs=None):
+    def accumulate(self, nextctx, excs=None, id=None):
         """
         Prepares a context manager for accumulating output for a
         portion of a test.  The ``nextctx`` argument must be one of
