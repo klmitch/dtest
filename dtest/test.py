@@ -530,8 +530,8 @@ class DTestBase(object):
 
         # Execute the test
         if pre_status:
-            with self._result.accumulate(TEST, self._raises):
-                get_call(self._test, obj)()
+            self._trigger(self._test.__name__,
+                          get_call(self._test, obj), (), {})
 
         # Invoke any clean-up that's necessary (regardless of
         # exceptions)
@@ -544,6 +544,118 @@ class DTestBase(object):
 
         # Return the result
         return self._result
+
+    def _parse_item(self, name, item):
+        """
+        Parses the tuple ``item`` returned by a generator "test".
+        Returns a 4-element tuple consisting of the name, the
+        callable, the positional arguments, and the keyword arguments.
+        Note that ``item`` may also be a bare callable.
+        """
+
+        if callable(item):
+            # It's a bare callable; make up name, arg, and kwargs
+            return ("%s:%s" % (name, item.__name__), item, (), {})
+        else:
+            # Convert item into a list so we can mutate it
+            try:
+                item = list(item)
+            except TypeError:
+                # Hmmm...
+                raise exceptions.DTestException("Generator result is not "
+                                                "a sequence")
+
+            # Make sure we have elements in the list
+            if len(item) < 1:
+                raise exceptions.DTestException("Generator result is an "
+                                                "empty list")
+
+            # Do we have a name?
+            n = None
+            if isinstance(item[0], basestring):
+                n = item.pop(0)
+
+            # Make sure we still have elements in the list
+            if len(item) < 1:
+                raise exceptions.DTestException("Generator result has no "
+                                                "callable")
+
+            # Get the callable
+            c = item.pop(0)
+
+            # Bail out if it's not actually callable
+            if not callable(c):
+                raise exceptions.DTestException("Generator result callable "
+                                                "element is not callable")
+
+            # Ensure we have a name
+            if n is None:
+                n = "%s:%s" % (name, c.__name__)
+
+            # Now we need to look for arguments
+            if len(item) < 1:
+                a = ()
+                k = {}
+            elif len(item) >= 2:
+                a, k = item[:2]
+            else:
+                tmp = item[0]
+
+                # Is it a dictionary?
+                if isinstance(tmp, dict):
+                    a = ()
+                    k = tmp
+                else:
+                    a = tmp
+                    k = {}
+
+        # Return the computed tuple
+        return (n, c, a, k)
+
+    def _trigger(self, name, call, args, kwargs):
+        """
+        Handles making a single call.  If the callable ``call`` is a
+        generator function, it will be iterated over and each result
+        sent recursively to _trigger.  Otherwise, the call will be
+        repeated the number of times requested by @repeat().
+
+        Generator functions may return a tuple consisting of an
+        optional name (which must be a string), a callable (which may
+        be another generator), a sequence of function arguments, and a
+        dictionary of function keyword arguments.  Any element except
+        the callable may be omitted.  Generators may also return a
+        bare callable.
+        """
+
+        # First, check if this is a generator function
+        if inspect.isgeneratorfunction(call):
+            # Allocate and use a context for the generator itself
+            with self._result.accumulate(TEST, id=name):
+                # OK, we need to iterate over the result
+                for item in call(*args, **kwargs):
+                    # Make the recursive call
+                    self._trigger(*self._parse_item(name, item))
+
+            # Fully handled the generator function
+            return
+
+        # OK, it's a regular test function; let's allocate a result
+        # context for it
+        for i in range(self._repeat):
+            # Allocate a context
+            ctx = self._result.accumulate(TEST, self._raises, name)
+
+            # Now, let's fire off the test
+            self._fire(ctx, call, args, kwargs)
+
+    def _fire(self, ctx, call, args, kwargs):
+        """
+        Performs the actual test function.  This is in a separate
+        method so that it can be spawned as appropriate.
+        """
+
+        with ctx:
+            call(*args, **kwargs)
 
     def _depcheck(self, output):
         """
