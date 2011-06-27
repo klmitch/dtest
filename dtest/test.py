@@ -608,8 +608,13 @@ class DTestBase(object):
         instance.
         """
 
-        # Prepares the test for running by setting up a result
-        self._result = result.DTestResult(self)
+        # Select the correct result container
+        if self._repeat > 1 or inspect.isgeneratorfunction(self._test):
+            # Will have multiple results
+            self._result = result.DTestResultMulti(self)
+        else:
+            # Just one result; use the simpler machinery
+            self._result = result.DTestResult(self)
 
     def _comp_result(self, tot, suc, fail, err):
         """
