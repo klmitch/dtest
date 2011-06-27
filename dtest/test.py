@@ -36,6 +36,7 @@ import types
 
 from dtest.constants import *
 from dtest import exceptions
+from dtest import policy
 from dtest import result
 
 
@@ -106,7 +107,7 @@ class DTestBase(object):
     _class_attributes = [
         '_name', '_test', '_class', '_exp_fail', '_skip', '_pre', '_post',
         '_deps', '_revdeps', '_partner', '_attrs', '_raises', '_timeout',
-        '_result', '_repeat'
+        '_result', '_repeat', '_policy'
         ]
 
     def __init__(self, test):
@@ -157,6 +158,7 @@ class DTestBase(object):
         self._timeout = None
         self._result = None
         self._repeat = 1
+        self._policy = policy.SerialPolicy()
 
         # Attach ourself to the test
         test._dt_dtest = self
@@ -1144,6 +1146,44 @@ def repeat(count):
 
     # Return the actual decorator
     return wrapper
+
+
+def policy(pol, func=None):
+    """
+    Decorates a test to indicate the parallelization policy for the
+    test.  This is only meaningful on tests that are repeated or on
+    generator functions.
+    """
+
+    # Need a wrapper to perform the actual decoration
+    def wrapper(f):
+        # Get the DTest object for the test
+        dt = _gettest(f)
+
+        # Change the parallelization policy
+        dt._policy = pol
+
+        # Return the function
+        return f
+
+    # If the function is specified, apply the wrapper directly
+    if func is not None:
+        return wrapper(func)
+
+    # Return the actual decorator
+    return wrapper
+
+
+def parallel(func):
+    """
+    Decorates a test to indicate that the test can be executed with
+    the UnlimitedParallelPolicy parallelization policy.  This is only
+    meaningful on tests that are repeated or on generator function
+    tests.
+    """
+
+    # Apply the policy to the test
+    return policy(policy.UnlimitedParallelPolicy(), func)
 
 
 testRE = re.compile(r'(?:^|[\b_\.-])[Tt]est')
