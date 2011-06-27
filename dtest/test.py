@@ -29,6 +29,7 @@ number of decorators, such as @istest, @nottest, @skip, @failing,
 utility function dot().
 """
 
+import inspect
 import re
 import sys
 import types
