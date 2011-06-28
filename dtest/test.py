@@ -533,8 +533,15 @@ class DTestBase(object):
 
         # Execute the test
         if pre_status:
+            # Prepare the strategy...
+            self._strategy.prepare()
+
+            # Trigger the test
             self._trigger(self._test.__name__,
                           get_call(self._test, obj), (), {})
+
+            # Wait for spawned threads
+            self._strategy.wait()
 
         # Invoke any clean-up that's necessary (regardless of
         # exceptions)
@@ -649,7 +656,7 @@ class DTestBase(object):
             ctx = self._result.accumulate(TEST, self._raises, name)
 
             # Now, let's fire off the test
-            self._fire(ctx, call, args, kwargs)
+            self._strategy.spawn(self._fire, ctx, call, args, kwargs)
 
     def _fire(self, ctx, call, args, kwargs):
         """
