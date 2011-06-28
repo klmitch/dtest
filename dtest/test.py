@@ -36,7 +36,7 @@ import types
 
 from dtest.constants import *
 from dtest import exceptions
-from dtest import strategy
+from dtest import strategy as strat
 from dtest import result
 
 
@@ -158,7 +158,7 @@ class DTestBase(object):
         self._timeout = None
         self._result = None
         self._repeat = 1
-        self._strategy = strategy.SerialStrategy()
+        self._strategy = strat.SerialStrategy()
 
         # Attach ourself to the test
         test._dt_dtest = self
@@ -1190,7 +1190,7 @@ def parallel(func):
     """
 
     # Apply the strategy to the test
-    return strategy(strategy.UnlimitedParallelStrategy(), func)
+    return strategy(strat.UnlimitedParallelStrategy(), func)
 
 
 testRE = re.compile(r'(?:^|[\b_\.-])[Tt]est')
