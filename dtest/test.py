@@ -1157,9 +1157,29 @@ def repeat(count):
 
 def strategy(pol, func=None):
     """
-    Decorates a test to indicate the parallelization strategy for the
-    test.  This is only meaningful on tests that are repeated or on
-    generator functions.
+    Used to set the parallelization strategy for tests to ``pol``.  If
+    ``func`` is provided, the parallelization strategy for ``func`` is
+    set; otherwise, returns a function which can be used as a
+    decorator.  This behavior on the presence of ``func`` allows
+    strategy() to be used to create user-defined parallelization
+    strategy decorators.
+
+    Parallelization strategies allow tests that are defined as
+    generators or which are decorated with the @repeat() decorator to
+    execute in parallel threads.  A parallelization strategy is an
+    object defining prepare(), spawn(), and wait() methods, which will
+    be called in that order.  The prepare() method is passed no
+    arguments and simply prepares the strategy object for a sequence
+    of spawn() calls.  The spawn() method is called with a callable
+    and the arguments and keyword arguments, and should cause the
+    callable to be executed (presumably in a separate thread of
+    control) with the given arguments.  Once all calls have been
+    spawned, DTest will call the wait() method, which must wait for
+    all the spawned callables to complete execution.
+
+    Note that the callable passed to the spawn() method is not a test,
+    and no assumptions may be made about the callable or its
+    arguments.
     """
 
     # Need a wrapper to perform the actual decoration
