@@ -38,8 +38,11 @@ default (@skip); marking a test as having an expected failure
 (@failing); setting arbitrary attributes on a test (@attr());
 indicating that a test is dependent on other tests (@depends());
 indicating that a test is expected to raise a given exception or one
-of a given set of exceptions (@raises()); and marking that a test
-should conclude within a given time limit (@timed()).
+of a given set of exceptions (@raises()); marking that a test should
+conclude within a given time limit (@timed()); requesting that a test
+be executed multiple times (@repeat()); setting an alternate
+parallelization strategy (@strategy()); and using the unlimited
+parallelization strategy (@parallel).
 
 Tests may be discovered using the explore() function, which returns an
 instance of DTestQueue.  (This instance may be passed to other
@@ -59,7 +62,25 @@ desired, but a number of utilities are available in the dtest.util
 package for performing various common tests.  Additionally, a special
 output stream, ``dtest.status``, is provided; this stream may be used
 to emit status messages to inform the user of the status of a
-long-running test.
+long-running test.  (Note that the use of ``dtest.status`` is
+incompatible at present with use of the @parallel decorator or other
+parallelization strategies.)
+
+For complex testing behavior, generator test functions are possible.
+These test functions should yield either a callable or a tuple.  If a
+tuple is yielded, the first or second element must be a callable, and
+the elements after the callable identify positional arguments, keyword
+arguments, or both (in the order positional arguments as a sequence,
+followed by keyword arguments as a dictionary).  If the callable is
+the second element of the tuple, the first must be a string giving a
+name for the test.  Note that yielded tests cannot have dependencies,
+fixtures or any of the other DTest decorators; all such enhancements
+must be attached to the generator function; on the other hand, it is
+legal for the yielded callable to be a generator itself, which will be
+treated identically to the top-level generator function.  Also note
+that when the @repeat() decorator is applied to a generator test
+function, each yielded function will be called the designated number
+of times, but the generator itself will be called only once.
 
 Note that both dtest and dtest.util are safe for use with "import *".
 """
