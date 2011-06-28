@@ -100,6 +100,7 @@ class UnlimitedParallelStrategy(object):
         """
 
         # Spawn our internal function in a separate thread
+        self.count += 1
         spawn_n(self._spawn, call, args, kwargs)
 
     def _spawn(self, call, args, kwargs):
@@ -108,9 +109,6 @@ class UnlimitedParallelStrategy(object):
         helper method maintains the count and arranges for the event
         to be signaled when appropriate.
         """
-
-        # Increment the count...
-        self.count += 1
 
         # Call the call
         call(*args, **kwargs)
@@ -139,3 +137,6 @@ class UnlimitedParallelStrategy(object):
 
         # Now we wait on the event
         self.event.wait()
+
+        # End by clearing the event
+        self.event = None
