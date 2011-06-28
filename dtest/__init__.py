@@ -70,7 +70,7 @@ from dtest.exceptions import DTestException
 from dtest.core import DTestQueue, DTestOutput, status, explore, main, \
     optparser, opts_to_args
 from dtest.test import istest, nottest, isfixture, skip, failing, attr, \
-    depends, raises, timed, DTestCase
+    depends, raises, timed, repeat, strategy, parallel, DTestCase
 
 __all__ = ['Capturer',
            'PRE', 'POST', 'TEST',
@@ -80,4 +80,5 @@ __all__ = ['Capturer',
            'DTestQueue', 'DTestOutput', 'status', 'explore', 'main',
            'optparser', 'opts_to_args',
            'istest', 'nottest', 'isfixture', 'skip', 'failing', 'attr',
-           'depends', 'raises', 'timed', 'DTestCase']
+           'depends', 'raises', 'timed', 'repeat', 'strategy', 'parallel',
+           'DTestCase']
