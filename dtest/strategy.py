@@ -14,16 +14,16 @@
 #    under the License.
 
 """
-========================
-Parallelization Policies
-========================
+==========================
+Parallelization Strategies
+==========================
 
 This module contains all the classes necessary for identifying
-parallelization policies.  A parallelization policy provides support
-for alternate modes of parallelizing multiple-result tests, i.e.,
-tests on which @repeat() has been used or which are generators
+parallelization strategies.  A parallelization strategy provides
+support for alternate modes of parallelizing multiple-result tests,
+i.e., tests on which @repeat() has been used or which are generators
 providing lists of other test functions to execute.  This module
-contains SerialPolicy and UnlimitedParallelPolicy.
+contains SerialStrategy and UnlimitedParallelStrategy.
 """
 
 from eventlet import spawn_n
@@ -31,19 +31,19 @@ from eventlet.event import Event
 from eventlet.semaphore import Semaphore
 
 
-class SerialPolicy(object):
+class SerialStrategy(object):
     """
-    SerialPolicy
+    SerialStrategy
     ============
 
-    The SerialPolicy class is a parallelization policy that causes
+    The SerialStrategy class is a parallelization strategy that causes
     spawned tests to be executed serially, one after another.
     """
 
     def prepare(self):
         """
-        Prepares the SerialPolicy object to spawn a set of tests.
-        Since SerialPolicy "spawns" tests by running them
+        Prepares the SerialStrategy object to spawn a set of tests.
+        Since SerialStrategy "spawns" tests by running them
         synchronously, this function is a no-op.
         """
 
@@ -53,7 +53,7 @@ class SerialPolicy(object):
         """
         Spawn a function.  The callable ``call`` will be executed with
         the provided positional and keyword arguments.  Since
-        SerialPolicy "spawns" tests by running them synchronously,
+        SerialStrategy "spawns" tests by running them synchronously,
         this function simply calls ``call`` directly.
         """
 
@@ -61,7 +61,7 @@ class SerialPolicy(object):
 
     def wait(self):
         """
-        Waits for spawned tests to complete.  Since SerialPolicy
+        Waits for spawned tests to complete.  Since SerialStrategy
         "spawns" tests by running them synchronously, this function is
         a no-op.
         """
@@ -69,20 +69,21 @@ class SerialPolicy(object):
         pass
 
 
-class UnlimitedParallelPolicy(object):
+class UnlimitedParallelStrategy(object):
     """
-    UnlimitedParallelPolicy
+    UnlimitedParallelStrategy
     =======================
 
-    The UnlimitedParallelPolicy class is a parallelization policy that
-    causes spawned tests to be executed in parallel, with no limit on
-    the maximum number of tests that can be executing at one time.
+    The UnlimitedParallelStrategy class is a parallelization strategy
+    that causes spawned tests to be executed in parallel, with no
+    limit on the maximum number of tests that can be executing at one
+    time.
     """
 
     def prepare(self):
         """
-        Prepares the UnlimitedParallelPolicy object to spawn a set of
-        tests.  Simply initializes a counter to zero and sets up an
+        Prepares the UnlimitedParallelStrategy object to spawn a set
+        of tests.  Simply initializes a counter to zero and sets up an
         event to be signaled when all tests are done.
         """
 

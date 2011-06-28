@@ -36,7 +36,7 @@ import types
 
 from dtest.constants import *
 from dtest import exceptions
-from dtest import policy
+from dtest import strategy
 from dtest import result
 
 
@@ -107,7 +107,7 @@ class DTestBase(object):
     _class_attributes = [
         '_name', '_test', '_class', '_exp_fail', '_skip', '_pre', '_post',
         '_deps', '_revdeps', '_partner', '_attrs', '_raises', '_timeout',
-        '_result', '_repeat', '_policy'
+        '_result', '_repeat', '_strategy'
         ]
 
     def __init__(self, test):
@@ -158,7 +158,7 @@ class DTestBase(object):
         self._timeout = None
         self._result = None
         self._repeat = 1
-        self._policy = policy.SerialPolicy()
+        self._strategy = strategy.SerialStrategy()
 
         # Attach ourself to the test
         test._dt_dtest = self
@@ -1148,9 +1148,9 @@ def repeat(count):
     return wrapper
 
 
-def policy(pol, func=None):
+def strategy(pol, func=None):
     """
-    Decorates a test to indicate the parallelization policy for the
+    Decorates a test to indicate the parallelization strategy for the
     test.  This is only meaningful on tests that are repeated or on
     generator functions.
     """
@@ -1160,8 +1160,8 @@ def policy(pol, func=None):
         # Get the DTest object for the test
         dt = _gettest(f)
 
-        # Change the parallelization policy
-        dt._policy = pol
+        # Change the parallelization strategy
+        dt._strategy = pol
 
         # Return the function
         return f
@@ -1177,13 +1177,13 @@ def policy(pol, func=None):
 def parallel(func):
     """
     Decorates a test to indicate that the test can be executed with
-    the UnlimitedParallelPolicy parallelization policy.  This is only
-    meaningful on tests that are repeated or on generator function
-    tests.
+    the UnlimitedParallelStrategy parallelization strategy.  This is
+    only meaningful on tests that are repeated or on generator
+    function tests.
     """
 
-    # Apply the policy to the test
-    return policy(policy.UnlimitedParallelPolicy(), func)
+    # Apply the strategy to the test
+    return strategy(strategy.UnlimitedParallelStrategy(), func)
 
 
 testRE = re.compile(r'(?:^|[\b_\.-])[Tt]est')
