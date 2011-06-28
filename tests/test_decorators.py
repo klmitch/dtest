@@ -14,6 +14,7 @@
 #    under the License.
 
 from dtest import *
+from dtest.strategy import SerialStrategy, UnlimitedParallelStrategy
 from dtest.test import DTestFixture
 from dtest.util import *
 
@@ -54,6 +55,16 @@ def test_raises():
 
 @timed(1)
 def test_timed():
+    pass
+
+
+@repeat(2)
+def test_repeat():
+    pass
+
+
+@parallel
+def test_parallel():
     pass
 
 
@@ -117,6 +128,23 @@ class TestDecorators(DTestCase):
 
         # Verify that it's None on something else
         assert_is_none(test_raises._dt_dtest.timeout)
+
+    @istest
+    def repeat(self):
+        # Verify that the repeat count is set properly
+        assert_equal(test_repeat._dt_dtest.repeat, 2)
+
+        # Verify that it's 1 on something else
+        assert_equal(test_timed._dt_dtest.repeat, 1)
+
+    @istest
+    def parallel(self):
+        # Verify that the strategy is set properly
+        assert_is_instance(test_parallel._dt_dtest._strategy,
+                           UnlimitedParallelStrategy)
+
+        # Verify that it's SerialStrategy on something else
+        assert_is_instance(test_timed._dt_dtest._strategy, SerialStrategy)
 
     @istest
     def isfixture(self):
