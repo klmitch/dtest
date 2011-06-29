@@ -58,8 +58,8 @@ class ThresholdPolicy(object):
         legal here.
         """
 
-        # Save the threshold
-        self.threshold = threshold
+        # Save the threshold as a float
+        self.threshold = float(threshold)
 
     def __call__(self, tot, suc, fail, err):
         """
