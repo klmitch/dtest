@@ -62,9 +62,12 @@ desired, but a number of utilities are available in the dtest.util
 package for performing various common tests.  Additionally, a special
 output stream, ``dtest.status``, is provided; this stream may be used
 to emit status messages to inform the user of the status of a
-long-running test.  (Note that the use of ``dtest.status`` is
-incompatible at present with use of the @parallel decorator or other
-parallelization strategies.)
+long-running test.  (Additional properties and methods are available
+on ``dtest.status`` for supporting this special stream within
+newly-created threads.  The built-in parallelization strategies
+already use this support.  For more information, see the documentation
+for ``dtest.status.output``, ``dtest.status.test``, and
+``dtest.status.setup()``.)
 
 For complex testing behavior, generator test functions are possible.
 These test functions should yield either a callable or a tuple.  If a
