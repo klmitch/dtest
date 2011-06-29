@@ -37,8 +37,8 @@ import types
 from dtest.constants import *
 from dtest import exceptions
 from dtest import policy as pol
-from dtest import strategy as strat
 from dtest import result
+from dtest import strategy as strat
 
 
 SETUP = 'setUp'
