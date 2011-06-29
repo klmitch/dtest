@@ -23,7 +23,8 @@ parallelization strategies.  A parallelization strategy provides
 support for alternate modes of parallelizing multiple-result tests,
 i.e., tests on which @repeat() has been used or which are generators
 providing lists of other test functions to execute.  This module
-contains SerialStrategy and UnlimitedParallelStrategy.
+contains SerialStrategy, UnlimitedParallelStrategy, and
+LimitedParallelStrategy.
 """
 
 import dtest

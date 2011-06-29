@@ -41,8 +41,8 @@ indicating that a test is expected to raise a given exception or one
 of a given set of exceptions (@raises()); marking that a test should
 conclude within a given time limit (@timed()); requesting that a test
 be executed multiple times (@repeat()); setting an alternate
-parallelization strategy (@strategy()); and using the unlimited
-parallelization strategy (@parallel).
+parallelization strategy (@strategy()); and using the multithreaded
+parallelization strategies (@parallel()).
 
 Tests may be discovered using the explore() function, which returns an
 instance of DTestQueue.  (This instance may be passed to other
