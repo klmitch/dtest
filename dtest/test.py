@@ -1155,9 +1155,9 @@ def repeat(count):
     return wrapper
 
 
-def strategy(pol, func=None):
+def strategy(st, func=None):
     """
-    Used to set the parallelization strategy for tests to ``pol``.  If
+    Used to set the parallelization strategy for tests to ``st``.  If
     ``func`` is provided, the parallelization strategy for ``func`` is
     set; otherwise, returns a function which can be used as a
     decorator.  This behavior on the presence of ``func`` allows
@@ -1188,7 +1188,7 @@ def strategy(pol, func=None):
         dt = _gettest(f)
 
         # Change the parallelization strategy
-        dt._strategy = pol
+        dt._strategy = st
 
         # Return the function
         return f
@@ -1212,11 +1212,11 @@ def parallel(arg):
     """
 
     # Default strategy is the UnlimitedParallelStrategy
-    pol = strat.UnlimitedParallelStrategy()
+    st = strat.UnlimitedParallelStrategy()
 
     # Wrapper to actually attach the strategy to the test
     def wrapper(func):
-        return strategy(pol, func)
+        return strategy(st, func)
 
     # If arg is a callable, call wrapper directly
     if callable(arg):
@@ -1224,7 +1224,7 @@ def parallel(arg):
 
     # OK, arg is an integer and specifies a limit on the number of
     # threads; set up a LimitedParallelStrategy.
-    pol = strat.LimitedParallelStrategy(arg)
+    st = strat.LimitedParallelStrategy(arg)
 
     # And return the wrapper, which will be the actual decorator
     return wrapper
