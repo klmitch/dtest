@@ -481,10 +481,10 @@ class DTestResultMulti(DTestResult):
 
         # Finally, compute the values of _result and _error based on
         # the threshold strategy of the test
-        self._result, self._error = self._test._comp_result(self._total_cnt,
-                                                            self._success_cnt,
-                                                            self._failure_cnt,
-                                                            self._error_cnt)
+        self._result, self._error = self._test._policy(self._total_cnt,
+                                                       self._success_cnt,
+                                                       self._failure_cnt,
+                                                       self._error_cnt)
 
     def _storemsg(self, ctx, captured, exc_type, exc_value, tb):
         """

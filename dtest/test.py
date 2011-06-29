@@ -36,6 +36,7 @@ import types
 
 from dtest.constants import *
 from dtest import exceptions
+from dtest import policy as pol
 from dtest import strategy as strat
 from dtest import result
 
@@ -107,7 +108,7 @@ class DTestBase(object):
     _class_attributes = [
         '_name', '_test', '_class', '_exp_fail', '_skip', '_pre', '_post',
         '_deps', '_revdeps', '_partner', '_attrs', '_raises', '_timeout',
-        '_result', '_repeat', '_strategy'
+        '_result', '_repeat', '_strategy', '_policy'
         ]
 
     def __init__(self, test):
@@ -159,6 +160,7 @@ class DTestBase(object):
         self._result = None
         self._repeat = 1
         self._strategy = strat.SerialStrategy()
+        self._policy = pol.basicPolicy
 
         # Attach ourself to the test
         test._dt_dtest = self
@@ -738,17 +740,6 @@ class DTestBase(object):
             # Just one result; use the simpler machinery
             self._result = result.DTestResult(self)
 
-    def _comp_result(self, tot, suc, fail, err):
-        """
-        Computes the result and error values on behalf of the result
-        object, based on passed-in counts.
-        """
-
-        # Implement the basic threshold algorithm--if there are any
-        # errors, we're in error, else if there are any failures,
-        # we're only in failure, otherwise we're OK.
-        return (fail == 0 and err == 0), (err > 0)
-
 
 class DTest(DTestBase):
     """
@@ -1227,6 +1218,65 @@ def parallel(arg):
     st = strat.LimitedParallelStrategy(arg)
 
     # And return the wrapper, which will be the actual decorator
+    return wrapper
+
+
+def policy(p, func=None):
+    """
+    Used to set the result policy for tests to ``p``.  If ``func`` is
+    provided, the result policy for ``func`` is set; otherwise,
+    returns a function which can be used as a decorator.  This
+    behavior on the presence of ``func`` allows policy() to be used to
+    create user-defined result policy decorators.
+
+    Result policies allow tests that are defined as generators or
+    which are decorated with the @repeat() decorator to specify more
+    complex computations than simply requiring all functions executed
+    to succeed.  A result policy is simply a callable, and can be
+    either a function or an object with a __call__() method.  It will
+    be passed four counts--the total number of functions executed so
+    far, the total number of successes seen so far, the total number
+    of failures seen so far, and the total number of errors seen so
+    far.  It must return a tuple of two boolean values; the first
+    should be True if and only if the overall result is a success, and
+    the second should be True if and only if the overall result is an
+    error.  The second boolean may not be True if the first boolean is
+    True.
+    """
+
+    # Need a wrapper to perform the actual decoration
+    def wrapper(f):
+        # Get the DTest object for the test
+        dt = _gettest(f)
+
+        # Change the result policy
+        dt._policy = p
+
+        # Return the function
+        return f
+
+    # If the function is specified, apply the wrapper directly
+    if func is not None:
+        return wrapper(func)
+
+    # Return the actual decorator
+    return wrapper
+
+
+def threshold(th):
+    """
+    Decorates a test to indicate that the test's result policy is a
+    threshold policy.  The ``th`` argument is a float between 0.0 and
+    100.0, and indicates the minimum percentage of tests which must
+    succeed for the overall result to be a success.  Note that any
+    errors cause the overall result to be an error.
+    """
+
+    # Wrapper to actually attach the threshold to the test
+    def wrapper(func):
+        return policy(pol.ThresholdPolicy(th), func)
+
+    # Now return the wrapper, which will be the actual decorator
     return wrapper
 
 
