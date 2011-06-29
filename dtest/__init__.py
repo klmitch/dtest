@@ -41,8 +41,9 @@ indicating that a test is expected to raise a given exception or one
 of a given set of exceptions (@raises()); marking that a test should
 conclude within a given time limit (@timed()); requesting that a test
 be executed multiple times (@repeat()); setting an alternate
-parallelization strategy (@strategy()); and using the multithreaded
-parallelization strategies (@parallel()).
+parallelization strategy (@strategy()); using the multithreaded
+parallelization strategies (@parallel()); setting the result policy
+(@policy()); and using the threshold result policy (@threshold()).
 
 Tests may be discovered using the explore() function, which returns an
 instance of DTestQueue.  (This instance may be passed to other
@@ -84,6 +85,19 @@ treated identically to the top-level generator function.  Also note
 that when the @repeat() decorator is applied to a generator test
 function, each yielded function will be called the designated number
 of times, but the generator itself will be called only once.
+
+When using the above complex testing behavior, it is also possible to
+affect the overall result based on the number of individual successes,
+failures, and errors encountered through the use of result policies.
+By default, the overall result is only a success if all individual
+runs return result, and an error overall result is reported if any
+errors were encountered; however, a threshold policy can be selected
+by decorating the test with the @threshold() decorator.  In the
+threshold policy, any errors result in an overall error result, but
+only a given percentage of tests must succeed in order for the overall
+result to be a success.  It is also possible to build special-purpose
+result policies; they can be attached to a test using the @policy()
+decorator.
 
 Note that both dtest and dtest.util are safe for use with "import *".
 """
