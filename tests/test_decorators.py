@@ -14,6 +14,7 @@
 #    under the License.
 
 from dtest import *
+from dtest.policy import ThresholdPolicy
 from dtest.strategy import SerialStrategy, UnlimitedParallelStrategy, \
     LimitedParallelStrategy
 from dtest.test import DTestFixture
@@ -71,6 +72,11 @@ def test_parallel():
 
 @parallel(2)
 def test_parallel_limited():
+    pass
+
+
+@threshold(50)
+def test_threshold():
     pass
 
 
@@ -160,6 +166,14 @@ class TestDecorators(DTestCase):
 
         # Verify that the limit is set properly
         assert_equal(test_parallel_limited._dt_dtest._strategy.limit, 2)
+
+    @istest
+    def threshold(self):
+        # Verify that the policy is set properly
+        assert_is_instance(test_threshold._dt_dtest._policy, ThresholdPolicy)
+
+        # Verify that the threshold is set properly
+        assert_almost_equal(test_threshold._dt_dtest._policy.threshold, 50.0)
 
     @istest
     def isfixture(self):
