@@ -26,6 +26,8 @@ providing lists of other test functions to execute.  This module
 contains SerialStrategy and UnlimitedParallelStrategy.
 """
 
+import dtest
+
 from eventlet import spawn_n
 from eventlet.event import Event
 from eventlet.semaphore import Semaphore
@@ -92,6 +94,10 @@ class UnlimitedParallelStrategy(object):
         self.lock = Semaphore()
         self.event = None
 
+        # Save the output and test for the status stream
+        self.output = dtest.status.output
+        self.test = dtest.status.test
+
     def spawn(self, call, *args, **kwargs):
         """
         Spawn a function.  The callable ``call`` will be executed with
@@ -109,6 +115,9 @@ class UnlimitedParallelStrategy(object):
         helper method maintains the count and arranges for the event
         to be signaled when appropriate.
         """
+
+        # Initialize the status stream
+        dtest.status.setup(self.output, self.test)
 
         # Call the call
         call(*args, **kwargs)
