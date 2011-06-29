@@ -36,7 +36,7 @@ from eventlet.semaphore import Semaphore
 class SerialStrategy(object):
     """
     SerialStrategy
-    ============
+    ==============
 
     The SerialStrategy class is a parallelization strategy that causes
     spawned tests to be executed serially, one after another.
@@ -74,7 +74,7 @@ class SerialStrategy(object):
 class UnlimitedParallelStrategy(object):
     """
     UnlimitedParallelStrategy
-    =======================
+    =========================
 
     The UnlimitedParallelStrategy class is a parallelization strategy
     that causes spawned tests to be executed in parallel, with no
