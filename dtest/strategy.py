@@ -149,3 +149,49 @@ class UnlimitedParallelStrategy(object):
 
         # End by clearing the event
         self.event = None
+
+
+class LimitedParallelStrategy(UnlimitedParallelStrategy):
+    """
+    LimitedParallelStrategy
+    =======================
+
+    The LimitedParallelStrategy class is an extension of the
+    UnlimitedParallelStrategy that additionally limits the maximum
+    number of threads that may be executing at any given time.
+    """
+
+    def __init__(self, limit):
+        """
+        Initializes a LimitedParallelStrategy object.  The ``limit``
+        parameter specifies the maximum number of threads that may
+        execute at any given time.
+        """
+
+        # Save the limit
+        self.limit = limit
+
+    def prepare(self):
+        """
+        Prepares the LimitedParallelStrategy to spawn a set of tests.
+        In addition to the tasks performed by
+        UnlimitedParallelStrategy.prepare(), sets up a semaphore to
+        limit the maximum number of threads that may execute at once.
+        """
+
+        # Call our superclass prepare method
+        super(LimitedParallelStrategy, self).prepare()
+
+        # Also initialize a limiting semaphore
+        self.limit_sem = Semaphore(self.limit)
+
+    def _spawn(self, call, args, kwargs):
+        """
+        Executes ``call`` in a separate thread of control.  This
+        helper method extends UnlimitedParallelStrategy._spawn() to
+        acquire the limiting semaphore prior to executing the call.
+        """
+
+        # Call our superclass _spawn method with the limit semaphore
+        with self.limit_sem:
+            super(LimitedParallelStrategy, self)._spawn(call, args, kwargs)

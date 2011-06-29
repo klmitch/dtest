@@ -1201,16 +1201,33 @@ def strategy(pol, func=None):
     return wrapper
 
 
-def parallel(func):
+def parallel(arg):
     """
-    Decorates a test to indicate that the test can be executed with
-    the UnlimitedParallelStrategy parallelization strategy.  This is
-    only meaningful on tests that are repeated or on generator
-    function tests.
+    Decorates a test to indicate that the test can be executed with a
+    multithread parallelization strategy.  This is only meaningful on
+    tests that are repeated or on generator function tests.  If used
+    in the ``@parallel`` form, the maximum number of threads is
+    unlimited; if used as ``@parallel(n)``, the maximum number of
+    threads is limited to ``n``.
     """
 
-    # Apply the strategy to the test
-    return strategy(strat.UnlimitedParallelStrategy(), func)
+    # Default strategy is the UnlimitedParallelStrategy
+    pol = strat.UnlimitedParallelStrategy()
+
+    # Wrapper to actually attach the strategy to the test
+    def wrapper(func):
+        return strategy(pol, func)
+
+    # If arg is a callable, call wrapper directly
+    if callable(arg):
+        return wrapper(arg)
+
+    # OK, arg is an integer and specifies a limit on the number of
+    # threads; set up a LimitedParallelStrategy.
+    pol = strat.LimitedParallelStrategy(arg)
+
+    # And return the wrapper, which will be the actual decorator
+    return wrapper
 
 
 testRE = re.compile(r'(?:^|[\b_\.-])[Tt]est')

@@ -14,7 +14,8 @@
 #    under the License.
 
 from dtest import *
-from dtest.strategy import SerialStrategy, UnlimitedParallelStrategy
+from dtest.strategy import SerialStrategy, UnlimitedParallelStrategy, \
+    LimitedParallelStrategy
 from dtest.test import DTestFixture
 from dtest.util import *
 
@@ -65,6 +66,11 @@ def test_repeat():
 
 @parallel
 def test_parallel():
+    pass
+
+
+@parallel(2)
+def test_parallel_limited():
     pass
 
 
@@ -145,6 +151,15 @@ class TestDecorators(DTestCase):
 
         # Verify that it's SerialStrategy on something else
         assert_is_instance(test_timed._dt_dtest._strategy, SerialStrategy)
+
+    @istest
+    def parallel_limited(self):
+        # Verify that the strategy is set properly
+        assert_is_instance(test_parallel_limited._dt_dtest._strategy,
+                           LimitedParallelStrategy)
+
+        # Verify that the limit is set properly
+        assert_equal(test_parallel_limited._dt_dtest._strategy.limit, 2)
 
     @istest
     def isfixture(self):
