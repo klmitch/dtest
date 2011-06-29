@@ -91,6 +91,41 @@ class _DTestStatus(object):
 
         pass
 
+    @property
+    def output(self):
+        """
+        Retrieve the current DTestOutput object, which is stored in a
+        per-thread manner.  This property is provided to allow the
+        status stream to be set up in threads started within the
+        individual tests.  See the setup() method.
+        """
+
+        # This is simple...
+        return _output.out
+
+    @property
+    def test(self):
+        """
+        Retrieve the current test object, which is stored in a
+        per-thread manner.  This property is provided to allow the
+        status stream to be set up in threads started within the
+        individual tests.  See the setup() method.
+        """
+
+        # Also simple...
+        return _output.test
+
+    def setup(self, output, test):
+        """
+        Initializes the status stream within a new thread of control.
+        This routine should be called as the first action of a new
+        thread.
+        """
+
+        # Set up thread-local data
+        _output.out = output
+        _output.test = test
+
 
 # A stream for export
 status = _DTestStatus()
@@ -738,8 +773,7 @@ class DTestQueue(object):
 
         # Save the output and test relative to this thread, for the
         # status stream
-        _output.out = self.output
-        _output.test = dt
+        status.setup(self.output, dt)
 
         # Execute the test
         try:
