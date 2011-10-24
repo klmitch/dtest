@@ -80,6 +80,22 @@ def test_threshold():
     pass
 
 
+class ObjTest(object):
+    pass
+
+
+class ResourceTest(Resource):
+    def setUp(self):
+        t = ObjTest()
+        t.test = True
+        return t
+
+
+@require(test=ResourceTest())
+def test_require(test):
+    assert_true(test.test)
+
+
 class TestDecorators(DTestCase):
     @depends(test_timed)
     @classmethod
@@ -185,3 +201,15 @@ class TestDecorators(DTestCase):
 
         # Verify that we have the appropriate dependents
         assert_in(self.setUpClass._dt_dtest, test_timed._dt_dtest.dependents)
+
+    @istest
+    def require(self):
+        # Verify that test_require has a resource associated with it
+        assert_is_instance(test_require._dt_dtest._resources, dict)
+        assert_equal(len(test_require._dt_dtest._resources), 1)
+        assert_in('test', test_require._dt_dtest._resources)
+        assert_is_instance(test_require._dt_dtest._resources['test'],
+                           ResourceTest)
+
+        # Verify that everything else has empty resources
+        assert_equal(test_threshold._dt_dtest._resources, {})
