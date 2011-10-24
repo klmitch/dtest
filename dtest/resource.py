@@ -14,6 +14,7 @@
 #    under the License.
 
 import functools
+import sys
 
 from eventlet import semaphore
 
@@ -286,7 +287,8 @@ class Resource(object):
         # Build our proxy object
         return ResourceObject(self, obj, self.dirtymeths)
 
-    def release(self, obj, force=False):
+    def release(self, obj, exc_type=None, exc_value=None, exc_tb=None,
+                force=False):
         """
         Release a resource object.  If the object cannot be reused, or
         if ``force`` is True, the tearDown() method will be called.
@@ -296,7 +298,8 @@ class Resource(object):
 
         # Do we need to release the object?
         if force or self.oneshot or ResourceObject.dirty(obj):
-            self.tearDown(ResourceObject.obj(obj))
+            self.tearDown(ResourceObject.obj(obj),
+                          exc_type, exc_value, exc_tb)
             return False
 
         return True
@@ -311,11 +314,17 @@ class Resource(object):
                                   (self.__class__.__module__,
                                    self.__class__.__name__))
 
-    def tearDown(self, obj):
+    def tearDown(self, obj, exc_type, exc_value, exc_tb):
         """
         Tears down a resource allocated by setUp().  This is optional;
         implement it only if you need to release resources, such as
         open files.
+
+        Note that if the test failed or generated an error, the
+        ``exc_type``, ``exc_value``, and ``exc_tb`` values will
+        contain exception information.  This could be used to ensure
+        that debugging resources, such as temporary files, are
+        preserved in the event of a failure.
         """
 
         pass
@@ -364,7 +373,7 @@ class ResourceManager(object):
         # OK, create a new resource object
         return res.acquire()
 
-    def release(self, obj):
+    def release(self, obj, exc_type=None, exc_value=None, exc_tb=None):
         """
         Release a resource object ``obj``.  If the object is dirty, it
         will be discarded; otherwise, it will be added to the resource
@@ -375,7 +384,7 @@ class ResourceManager(object):
         res = ResourceObject.resource(obj)
 
         # Let the resource do any cleaning up it needs to do...
-        if not res.release(obj):
+        if not res.release(obj, exc_type, exc_value, exc_tb):
             # It was dirty, so we got rid of it
             return
 
@@ -416,10 +425,20 @@ class ResourceManager(object):
         for key, res in resources.items():
             objects[key] = self.acquire(res)
 
+        exc_info = ()
         try:
             # Call the function
             result = func(**objects)
-        finally:
-            # Now, release the resources we used
-            for obj in objects.values():
-                self.release(obj)
+        except Exception:
+            # Pull out the exception info...
+            exc_info = sys.exc_info()
+
+        # Now, release the resources we used
+        for obj in objects.values():
+            self.release(obj, *exc_info)
+
+        # Reraise any exception raised by the function...
+        if exc_info:
+            raise *exc_info
+
+        return result
