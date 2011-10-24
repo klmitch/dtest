@@ -507,7 +507,7 @@ class DTestQueue(object):
         self.runlist = set()
 
         # No initial resource manager...
-        self.res_mgr = None
+        self.res_mgr = resource.ResourceManager()
 
         # Need locks for the waiting and runlist lists
         self.waitlock = Semaphore()
@@ -632,9 +632,6 @@ class DTestQueue(object):
         # OK, put ourselves into the running state
         self.running = True
 
-        # Build our resource manager
-        self.res_mgr = resource.ResourceManager()
-
         # Must begin by ensuring we're monkey-patched
         monkey_patch()
 
@@ -682,6 +679,9 @@ class DTestQueue(object):
         if not debug:
             capture.uninstall()
 
+        # Now we go through and clean up all left-over resources
+        self.res_mgr.release_all()
+
         # Walk through the tests and output the results
         cnt = {
             OK: 0,
@@ -721,8 +721,9 @@ class DTestQueue(object):
 
         # If there were resource tearDown exceptions, emit data about
         # them
-        if self.res_mgr.messages:
-            self.output.resources(self.res_mgr.messages)
+        msgs = self.res_mgr.messages
+        if msgs:
+            self.output.resources(msgs)
 
         # If we saw exceptions, emit data about them
         if self.caught:

@@ -366,7 +366,7 @@ class ResourceManager(object):
         self._pool = {}
 
         # Need a place to store error messages
-        self.messages = []
+        self._messages = []
 
     def _get_pool(self, res):
         """
@@ -409,7 +409,7 @@ class ResourceManager(object):
         res = ResourceObject.resource(obj)
 
         # Let the resource do any cleaning up it needs to do...
-        if not res.release(obj, self.messages, status=status):
+        if not res.release(obj, self._messages, status=status):
             # It was dirty, so we got rid of it
             return
 
@@ -433,7 +433,7 @@ class ResourceManager(object):
             for objlist in self._pool.values():
                 for obj in objlist:
                     res = ResourceObject.resource(obj)
-                    res.release(obj, self.messages, force=True)
+                    res.release(obj, self._messages, force=True)
 
             # Clear the pool
             self._pool = {}
@@ -459,3 +459,18 @@ class ResourceManager(object):
         # Now, release the resources we used
         for obj in objects.values():
             self.release(obj, status=status)
+
+    @property
+    def messages(self):
+        """
+        Retrieve all error messages accumulated while releasing
+        resources.  Clears the message list.
+        """
+
+        # Get the current messages
+        msgs = self._messages
+
+        # Clear the list
+        self._messages = []
+
+        return msgs
