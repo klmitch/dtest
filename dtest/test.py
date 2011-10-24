@@ -108,7 +108,7 @@ class DTestBase(object):
     _class_attributes = [
         '_name', '_test', '_class', '_exp_fail', '_skip', '_pre', '_post',
         '_deps', '_revdeps', '_partner', '_attrs', '_raises', '_timeout',
-        '_result', '_repeat', '_strategy', '_policy'
+        '_result', '_repeat', '_strategy', '_policy', '_resources'
         ]
 
     def __init__(self, test):
@@ -570,7 +570,7 @@ class DTestBase(object):
                 # We don't allow this to fail; failures in tearDown()
                 # methods are pooled together and printed after all
                 # the test failures
-                resgen.send(self._result.status)
+                resgen.send(str(self.result))
             except StopIteration:
                 pass
 
