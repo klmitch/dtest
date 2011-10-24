@@ -107,9 +107,11 @@ from dtest.constants import *
 from dtest.exceptions import DTestException
 from dtest.core import DTestQueue, DTestOutput, status, explore, main, \
     optparser, opts_to_args
+from dtest.resource import cleanaccess, dirty, clean, getobject, \
+    Resource
 from dtest.test import istest, nottest, isfixture, skip, failing, attr, \
     depends, raises, timed, repeat, strategy, parallel, policy, threshold, \
-    DTestCase
+    require, DTestCase
 
 __all__ = ['Capturer',
            'PRE', 'POST', 'TEST',
@@ -118,6 +120,7 @@ __all__ = ['Capturer',
            'DTestException',
            'DTestQueue', 'DTestOutput', 'status', 'explore', 'main',
            'optparser', 'opts_to_args',
+           'cleanaccess', 'dirty', 'clean', 'getobject', 'Resource',
            'istest', 'nottest', 'isfixture', 'skip', 'failing', 'attr',
            'depends', 'raises', 'timed', 'repeat', 'strategy', 'parallel',
-           'policy', 'threshold', 'DTestCase']
+           'policy', 'threshold', 'require', 'DTestCase']

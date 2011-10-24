@@ -405,6 +405,18 @@ class DTestBase(object):
         # like an attribute
         return self._repeat
 
+    @property
+    def resources(self):
+        """
+        Retrieve the resources for this test.  Returns a shallow copy
+        of the resources dictionary, as set up by the @require()
+        decorator.
+        """
+
+        # We want the resources to be read-only, but to be accessed
+        # like an attribute
+        return self._resources.copy()
+
     @classmethod
     def promote(cls, test):
         """
