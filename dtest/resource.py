@@ -13,6 +13,25 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+"""
+==============
+Test Resources
+==============
+
+This module contains the Resource class, along with a number of other
+functions, which together provide the functionality for providing test
+resources.  A test resource is simply a discrete object which is
+required by a given test function or method; it could be a temporary
+file containing configuration for a component, or a client object for
+accessing a server, or virtually anything that would ordinarily be set
+up in a test fixture.  Resources which are not modified (which are not
+"dirty") may be reused by following tests, subject to threading
+constraints.
+
+This file does not contain the @require() decorator, which is defined
+in the dtest.test module.
+"""
+
 import functools
 import sys
 
@@ -287,8 +306,7 @@ class Resource(object):
         # Build our proxy object
         return ResourceObject(self, obj, self.dirtymeths)
 
-    def release(self, obj, exc_type=None, exc_value=None, exc_tb=None,
-                force=False):
+    def release(self, obj, msgs, status=None, force=False):
         """
         Release a resource object.  If the object cannot be reused, or
         if ``force`` is True, the tearDown() method will be called.
@@ -298,8 +316,12 @@ class Resource(object):
 
         # Do we need to release the object?
         if force or self.oneshot or ResourceObject.dirty(obj):
-            self.tearDown(ResourceObject.obj(obj),
-                          exc_type, exc_value, exc_tb)
+            try:
+                self.tearDown(ResourceObject.obj(obj), status)
+            except:
+                # In the event of an error releasing a resource, save
+                # a message documenting the failure
+                msgs.append((self, sys.exc_info()))
             return False
 
         return True
@@ -314,17 +336,17 @@ class Resource(object):
                                   (self.__class__.__module__,
                                    self.__class__.__name__))
 
-    def tearDown(self, obj, exc_type, exc_value, exc_tb):
+    def tearDown(self, obj, status):
         """
         Tears down a resource allocated by setUp().  This is optional;
         implement it only if you need to release resources, such as
         open files.
 
-        Note that if the test failed or generated an error, the
-        ``exc_type``, ``exc_value``, and ``exc_tb`` values will
-        contain exception information.  This could be used to ensure
-        that debugging resources, such as temporary files, are
-        preserved in the event of a failure.
+        Note that the test's status will be passed as the ``status``
+        argument, except in the case of cached resources being cleaned
+        up after all tests have finished running.  This status value
+        can be used to ensure that debugging resources, such as
+        temporary files, are preserved in the event of a failure.
         """
 
         pass
@@ -342,6 +364,9 @@ class ResourceManager(object):
 
         self._pool_lock = semaphore.Semaphore()
         self._pool = {}
+
+        # Need a place to store error messages
+        self.messages = []
 
     def _get_pool(self, res):
         """
@@ -373,7 +398,7 @@ class ResourceManager(object):
         # OK, create a new resource object
         return res.acquire()
 
-    def release(self, obj, exc_type=None, exc_value=None, exc_tb=None):
+    def release(self, obj, status=None):
         """
         Release a resource object ``obj``.  If the object is dirty, it
         will be discarded; otherwise, it will be added to the resource
@@ -384,7 +409,7 @@ class ResourceManager(object):
         res = ResourceObject.resource(obj)
 
         # Let the resource do any cleaning up it needs to do...
-        if not res.release(obj, exc_type, exc_value, exc_tb):
+        if not res.release(obj, self.messages, status=status):
             # It was dirty, so we got rid of it
             return
 
@@ -408,16 +433,19 @@ class ResourceManager(object):
             for objlist in self._pool.values():
                 for obj in objlist:
                     res = ResourceObject.resource(obj)
-                    res.release(obj, force=True)
+                    res.release(obj, self.messages, force=True)
 
             # Clear the pool
             self._pool = {}
 
-    def __call__(self, func, resources):
+    def collect(self, resources):
         """
-        Call the function ``func`` with keyword arguments as specified
-        by ``resources``.  Returns the return value of the function
-        call.
+        Collects the resources identified by the ``resources``
+        dictionary and yields them as a dictionary to the caller.  The
+        resources allocated are then released when the generator
+        continues.  The generator's send() method should be called
+        with the test status, which will then be passed to the
+        resource tearDown() methods.
         """
 
         # Set up the resources we need...
@@ -425,20 +453,9 @@ class ResourceManager(object):
         for key, res in resources.items():
             objects[key] = self.acquire(res)
 
-        exc_info = ()
-        try:
-            # Call the function
-            result = func(**objects)
-        except Exception:
-            # Pull out the exception info...
-            exc_info = sys.exc_info()
+        # Yield the resource dictionary and get the test status
+        status = yield objects
 
         # Now, release the resources we used
         for obj in objects.values():
-            self.release(obj, *exc_info)
-
-        # Reraise any exception raised by the function...
-        if exc_info:
-            raise *exc_info
-
-        return result
+            self.release(obj, status=status)

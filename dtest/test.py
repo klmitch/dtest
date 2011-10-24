@@ -161,6 +161,7 @@ class DTestBase(object):
         self._repeat = 1
         self._strategy = strat.SerialStrategy()
         self._policy = pol.basicPolicy
+        self._resources = {}
 
         # Attach ourself to the test
         test._dt_dtest = self
@@ -498,7 +499,7 @@ class DTestBase(object):
         # Re-set our name
         self._name = None
 
-    def _run(self, output):
+    def _run(self, output, res_mgr):
         """
         Perform the test.  Causes any fixtures discovered as part of
         the class or explicitly set (or overridden) by the setUp() and
@@ -533,6 +534,15 @@ class DTestBase(object):
             if not self._result:
                 pre_status = False
 
+        # Get the test resources...
+        resgen = None
+        if pre_status:
+            with self._result.accumulate(PRE):
+                resgen = res_mgr.collect(self._resources)
+                resources = resgen.next()
+            if not self._result:
+                pre_status = False
+
         # Execute the test
         if pre_status:
             # Prepare the strategy...
@@ -540,7 +550,7 @@ class DTestBase(object):
 
             # Trigger the test
             self._trigger(self._test.__name__,
-                          get_call(self._test, obj), (), {})
+                          get_call(self._test, obj), (), resources)
 
             # Wait for spawned threads
             self._strategy.wait()
@@ -553,6 +563,16 @@ class DTestBase(object):
 
         # Transition to the appropriate ending state
         self._result._transition(output=output)
+
+        # Clean up the resources
+        if resgen:
+            try:
+                # We don't allow this to fail; failures in tearDown()
+                # methods are pooled together and printed after all
+                # the test failures
+                resgen.send(self._result.status)
+            except StopIteration:
+                pass
 
         # Return the result
         return self._result
@@ -1277,6 +1297,30 @@ def threshold(th):
         return policy(pol.ThresholdPolicy(th), func)
 
     # Now return the wrapper, which will be the actual decorator
+    return wrapper
+
+
+def require(**resources):
+    """
+    Decorates a test to indicate that the test requires certain
+    resources.  Resources are specified as keyword arguments to the
+    decorator, with the values being instances of subclasses of
+    Resource; allocated versions of those resources will be passed in
+    corresponding keyword arguments to the test function.
+    """
+
+    # Need a wrapper to perform the actual decoration
+    def wrapper(func):
+        # Get the DTest object for the test
+        dt = _gettest(func)
+
+        # Store the required resources
+        dt._resources.update(resources)
+
+        # Return the function
+        return func
+
+    # Return the actual decorator
     return wrapper
 
 

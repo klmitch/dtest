@@ -48,6 +48,7 @@ from eventlet.semaphore import Semaphore
 from dtest import capture
 from dtest.constants import *
 from dtest.exceptions import DTestException
+from dtest import resource
 from dtest import test
 
 
@@ -389,6 +390,29 @@ class DTestOutput(object):
         # Flush the output
         self.output.flush()
 
+    def resources(self, res_msgs):
+        """
+        Called by main() if errors were encountered while tearing down
+        test resources.  The ``res_msgs`` argument is a list of tuples
+        containing two elements: the first element is the Resource
+        instance affected; and the second element is a three-element
+        tuple returned by sys.exc_info().
+        """
+
+        # Emit resource error data
+        print >>self.output, ("The following resource teardown errors were "
+                              "encountered:")
+        for res, (exc_type, exc_value, tb) in res_msgs:
+            exc_hdr = ' Resource %s ' % res.__class__.__name__
+            if len(res.key) > 1:
+                exc_hdr += '(%s) ' % ', '.join(res.key[1:])
+            tb = ''.join(traceback.format_exception(exc_type, exc_value, tb))
+            print >>self.output, exc_hdr.center(self.linewidth, '-')
+            print >>self.output, tb.rstrip()
+
+        # Flush the output
+        self.output.flush()
+
     def info(self, message):
         """
         Called to emit other specialized messages not specifically
@@ -481,6 +505,9 @@ class DTestQueue(object):
         self.tests = set()
         self.waiting = None
         self.runlist = set()
+
+        # No initial resource manager...
+        self.res_mgr = None
 
         # Need locks for the waiting and runlist lists
         self.waitlock = Semaphore()
@@ -605,6 +632,9 @@ class DTestQueue(object):
         # OK, put ourselves into the running state
         self.running = True
 
+        # Build our resource manager
+        self.res_mgr = resource.ResourceManager()
+
         # Must begin by ensuring we're monkey-patched
         monkey_patch()
 
@@ -689,6 +719,11 @@ class DTestQueue(object):
         # Emit summary data
         self.output.summary(cnt)
 
+        # If there were resource tearDown exceptions, emit data about
+        # them
+        if self.res_mgr.messages:
+            self.output.resources(self.res_mgr.messages)
+
         # If we saw exceptions, emit data about them
         if self.caught:
             self.output.caught(self.caught)
@@ -700,7 +735,8 @@ class DTestQueue(object):
         # failures, errors, or dependency failures
         if (cnt[UOK] > 0 or
             (cnt[FAIL] - cnt[XFAIL]) > 0 or
-            cnt[ERROR] > 0 or cnt[DEPFAIL] > 0):
+            cnt[ERROR] > 0 or cnt[DEPFAIL] > 0 or
+            len(self.res_mgr.messages) > 0):
             return False
 
         # All tests passed!
@@ -777,7 +813,7 @@ class DTestQueue(object):
 
         # Execute the test
         try:
-            dt._run(self.output)
+            dt._run(self.output, self.res_mgr)
         except:
             # Add the exception to the caught list
             self.caught.append(sys.exc_info())
