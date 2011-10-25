@@ -80,6 +80,85 @@ makes the ``@test_something.setUp`` and ``@test_something.tearDown``
 decorators available.  (For something analogous in the standard
 Python, check out the built-in ``@property`` decorator.)
 
+Test Resources
+==============
+
+Many test suites use test fixtures to set up temporary resources
+needed for a particular test.  For instance, it's not uncommon for a
+fixture to set up a utility object, such as a server client, which
+could be reused by other tests.  The DTest framework provides an
+alternative means of setting up such objects: test resources.
+
+A test resource is any single object that may be required by a given
+test.  To create one, set up a class extending the ``Resource`` class
+and implement the ``setUp()`` method on the class (and, optionally,
+the ``tearDown()`` method).  There are two additional class attributes
+that can be set.  The first is ``oneshot``: if set to True, the
+resource returned by ``setUp()`` will only be used once, then
+discarded.  The second is ``dirtymeths``, which should contain a list
+of methods which, when called, will cause the object to become
+"dirty", causing it to be discarded after the test.  (Setting or
+deleting object attributes will also cause the object to be marked as
+"dirty".)
+
+To mark that a test requires a particular resource, use the
+``@require()`` decorator; this decorator takes keyword arguments,
+where the keys will be taken as the names of arguments to the test,
+and the values must be instances of subclasses of ``Resource``.  When
+the test is run, DTest will create the actual resource objects and
+pass them to the test as keyword arguments.  As long as the object
+does not become dirty, it will be reused for subsequent tests, subject
+to threading constraints (resource objects may only be used by one
+thread at a time).
+
+Resource Limitations
+--------------------
+
+Resources are subject to one limitation: the object actually passed to
+the test is a proxy object which delegates attribute accesses to the
+actual object allocated by the ``setUp()`` method.  Because of
+optimizations within Python itself, it is not possible for this proxy
+object to properly delegate special methods, such as ``__getitem__()``
+or ``__add__()``.  Because of this, it is possible to retrieve the
+true resource object, using the ``getobject()`` function.  Because
+this removes the ability of the resources system to determine if the
+resource becomes dirty, the ``dirty()`` and ``clean()`` functions are
+also provided.  Finally, to prevent an access from marking the object
+as dirty, the ``cleanaccess()`` function can be used in conjunction
+with the ``with`` statement like so::
+
+    with cleanaccess(resource):
+        resource.attribute = "some value"
+
+Without the ``with`` statement, this attribute setting would cause the
+resource to be marked as dirty, but the ``with`` inhibits this.  Note
+that it is legal to nest calls to ``cleanaccess()``, if necessary.
+
+Resource Options
+----------------
+
+Resources may be specified with options, which should be
+string-coercible constants.  Any positional or keyword arguments
+passed to the ``Resource`` constructor will be saved and passed to the
+``setUp()`` method when a resource must be constructed.  In addition,
+the resource caching mechanism uses these options to ensure that a
+test is only passed resources with matching options.
+
+Optional ``tearDown()``
+-----------------------
+
+If some special cleanup is needed for a resource, implement the
+``tearDown()`` method on your ``Resource`` subclass.  It should take
+two arguments: the object that was returned by ``setUp()``, and the
+status of the test.  For most resources, unless a test renders them
+dirty, the status will be ``None``, and ``tearDown()`` will be called
+after all tests have run to completion; however, for resources which
+have ``oneshot`` set to True, the status should never be ``None``.
+One possible use case for this is a test which uses temporary files,
+which should be cleaned up after the test passes; should the test
+fail, it may be useful to leave the temporary file around for
+debugging purposes.
+
 Running Tests
 =============
 
